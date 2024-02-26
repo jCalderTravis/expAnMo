@@ -8,7 +8,7 @@ import matplotlib.colors as pltColours
 import matplotlib.cm as mplCm
 import pandas as pd
 import numpy as np
-from modelToolkit import helpers as helpKit
+from expAnMo import helpers as helpKit
 
 
 class DataToPlot():
