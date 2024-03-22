@@ -81,7 +81,7 @@ class DataToPlot():
             setting allowMissing to True.
         """
         if isinstance(naming, dict):
-            naming = [naming]*len(self.pltData)
+            naming = [deepcopy(naming) for _ in range(len(self.pltData))]
         else:
             assert len(naming) == len(self.pltData)
 
