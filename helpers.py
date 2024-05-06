@@ -72,7 +72,8 @@ def trimDfIndex(df: pd.DataFrame, idxLevel: str, win: tuple) -> pd.DataFrame:
     return df
 
 
-def subtractMatchingDfs(df1, df2, checkNan=True):
+def subtractMatchingDfs(df1: pd.DataFrame, df2: pd.DataFrame, 
+                        checkNan: bool = True) -> pd.DataFrame:
     """For two dataframes compute df1 - df2, but only after sorting the indexes
     and columns, and after checking that these columns and indexes are 
     matching.  
