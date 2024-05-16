@@ -666,8 +666,12 @@ class HeatmapPlotter(Plotter):
         retrieved data is in range.
         """
         colourData = self.findColourData(**pltKwargs)
-        below = np.min(colourData.to_numpy()) < self.cMin
-        above = np.max(colourData.to_numpy()) > self.cMax
+        if len(colourData) == 0:
+            below = False
+            above = False
+        else:
+            below = np.min(colourData.to_numpy()) < self.cMin
+            above = np.max(colourData.to_numpy()) > self.cMax
 
         if below or above:
             raise ValueError('Tring to plot data outside colour bar limits')
@@ -694,8 +698,13 @@ class HeatmapPlotter(Plotter):
 
         for theseKwargs in pltKwargsList:
             colourData = self.findColourData(**theseKwargs)
-            allMin.append(np.min(colourData.to_numpy()))
-            allMax.append(np.max(colourData.to_numpy()))
+            if len(colourData) != 0:
+                allMin.append(np.min(colourData.to_numpy()))
+                allMax.append(np.max(colourData.to_numpy()))
+
+        if len(allMin) == len(allMax) == 0:
+            allMin = [-1]
+            allMax = [1]
             
         cValMin = np.min(allMin)
         cValMax = np.max(allMax)
