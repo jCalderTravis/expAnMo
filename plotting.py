@@ -153,6 +153,8 @@ class DataToPlot():
                         to be conducted.
                     'edges': Sequence of scalars giving the bin edges to use.
 
+        TODO Add a seperately for option, so can do this seperately for 
+        chains and draws.
         """
         modifiedPltData = []
         for thisPltData in self.pltData:
