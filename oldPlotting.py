@@ -8,7 +8,7 @@ import matplotlib.colors as pltColours
 import matplotlib.cm as mplCm
 import pandas as pd
 import numpy as np
-from expAnMo import helpers as helpKit
+from . import helpers as helpKit
 
 
 class DataToPlot():
@@ -135,98 +135,8 @@ class DataToPlot():
         return pltData
     
 
-    def groupForPlotting(self, strategy: str, opts=None):
-        """ Group data in self.pltData ahead of plotting. Adds a new 'xGroup'
-        column to self.pltData, giving the group of each data point.
 
-        INPUT
-        strategy: str. Grouping strategy. Options are...
-            'col': The values in a column directly as the groups. 
-            'specifiedEdges': The x-values are binned based on specified bin
-                edges.
-        opts: dict. Depends on the value of strategy. The keys and 
-            values for each strategy option are as follows.
-                'col': Keys and values...
-                    'col': The name of the column to use directly as the groups
-                'specifiedEdges': Keys and values...
-                    'col': The name of the column upon which the binning is 
-                        to be conducted.
-                    'edges': Sequence of scalars giving the bin edges to use.
-
-        TODO Add a seperately for option, so can do this seperately for 
-        chains and draws.
-        """
-        modifiedPltData = []
-        for thisPltData in self.pltData:
-            assert 'xGroup' not in thisPltData.columns
-
-            if strategy == 'col':
-                assert set(opts.keys()) == {'col'}
-                thisPltData['xGroup'] = thisPltData[opts['col']]
-            
-            elif strategy == 'specifiedEdges':
-                assert set(opts.keys()) == {'col', 'edges'}
-                relCol = opts['col']
-                thisPltData['xGroup'] = pd.cut(thisPltData[relCol],
-                                                bins=opts['edges'],
-                                                labels=False)
-                assert not np.any(np.isnan(thisPltData['xGroup']))
-            else:
-                raise NotImplementedError('Case not yet covered')
-            
-            modifiedPltData.append(thisPltData)
-
-        self.pltData = modifiedPltData
-
-
-    def averageOut(self, av: str, over: str, separatelyFor: str | list[str]):
-        """ Average (over some feature of) the data. Applied seperately to 
-        each of the dataframes in self.pltData
-
-        av: str | list[str]. The name of a column or columns. Specifies the 
-            varaible(s) that we want to average.
-        over: str | None. The name of one of the columns. We average over this 
-            variable meaning it is removed from the dataset. May be None if 
-            we are not averaging out a specific column.
-        separatelyFor: str | list[str]. The names of one or more columns. 
-            Averaging is performed sepeately for each unique combination of 
-            these variables.
-
-        The initial dataframes must have all and only the columns av, over, and
-        those columns in seperateFor. The processed datasets have columns
-        av and those columns in seperateFor.
-        """
-        if not isinstance(av, list):
-            av = [av]
-        if not isinstance(separatelyFor, list):
-            assert isinstance(separatelyFor, str)
-            separatelyFor = [separatelyFor]
-
-        allAv = []
-        for thisPltData in self.pltData:
-            if over is None:
-                expectCols = av + separatelyFor
-            else:
-                expectCols = av + [over] + separatelyFor
-            assert set(thisPltData.columns) == set(expectCols)
-
-            avData = thisPltData.groupby(separatelyFor).mean()
-            helpKit.checkDfLevels(avData, indexLvs=separatelyFor)
-            if over is None: 
-                expectCols = set(av)
-            else:
-                expectCols = set(av + [over])
-            assert set(avData.columns) == expectCols
-            
-            if over is not None:
-                avData = avData.drop(columns=over)
-            avData = avData.reset_index(allow_duplicates=False)
-            assert len(set(avData.columns)) == len(avData.columns)
-            assert set(avData.columns) == set(av + separatelyFor)
-
-            allAv.append(avData)
-
-        self.pltData = allAv
+    
 
 
 def checkPltData(pltData: list[pd.DataFrame], allowMissing=False):
@@ -331,12 +241,8 @@ class OneSeriesSetPlotter():
 
         prepData = []
         for seriesIdx, thisData in enumerate(self.pltData):
-            grouped = thisData.groupby('xGroup')
-            xMean, _, xGroup = groupedToMeanSd(grouped['xValue'])
-            yMean, ySem, xGroupForY = groupedToMeanSd(grouped['yValue'])
             
-            assert np.array_equal(xGroup, xGroupForY)
-            assert np.all(np.diff(xMean) > 0)
+            # WORKING HERE -- moving this over
 
             if runSig:
                 pVal = self.runSigTests(seriesIdx)
@@ -1276,50 +1182,6 @@ def findSigEnds(xVals, sig):
     return sigRegions
 
 
-def groupedToPltData(grouped):
-    raise NotImplementedError('replaced by OneSeriesSetPlotter.prepareData')
-
-
-def groupedToMeanSd(grouped, sort=True):
-    """ Takes the grouped version (i.e. groupby applied) of a pandas
-    dataframe with a single column (or a grouped pandas series) and computes 
-    the mean and SEM for each group.
-
-    INPUT
-    grouped: grouped pandas dataframe.
-    sort: bool. If True, return the results sorted in assending order of the
-        grouping variable.
-
-    OUTPUT
-    mean: 1D array. Mean for each group of the values of the single column.
-    sem: 1D array. SEM for each group of the values of the single column.
-    group: 1D array. The value for each group of the grouping variable.
-    """
-    permitted = isinstance(grouped.mean(), pd.Series) or \
-        len(grouped.mean().columns) == 1
-    if not permitted:
-        raise ValueError('Should be groupby of a series or dataframe with '+
-                         'single column')
-
-    meanDf = grouped.mean()
-    if sort:
-        meanDf = meanDf.sort_index()
-    mean = meanDf.to_numpy()
-    mean = removeDimIfNeeded(mean)
-    group = meanDf.index.to_numpy()
-
-    semDf = grouped.sem()
-    if sort:
-        semDf = semDf.sort_index()
-    sem = semDf.to_numpy()
-    sem = removeDimIfNeeded(sem)
-    group2 = semDf.index.to_numpy()
-
-    assert np.array_equal(group, group2)
-    assert np.all([np.ndim(thisOut) == 1 
-                  for thisOut in [mean, sem, group]])
-    return mean, sem, group
-
 
 def plotHeatmapFromDf(df, unevenAllowed=False, plotFun='pcolormesh', 
                         xLabel=None, yLabel=None, cLabel=None,
@@ -1485,21 +1347,6 @@ def plotHeatmapFromDf(df, unevenAllowed=False, plotFun='pcolormesh',
     ax.spines['right'].set_visible(False)
 
     return fig, vmin, vmax
-
-
-def removeDimIfNeeded(thisArray):
-    """ Expects either a 1D array, or a 2D array, where the shape of the second
-    dimention is 1. This dimention will then be removed.
-    """
-    if np.ndim(thisArray) == 1:
-        pass
-    elif np.ndim(thisArray) == 2:
-        assert thisArray.shape[1] == 1
-        thisArray = np.squeeze(thisArray, axis=1)
-    else:
-        raise AssertionError('Unexpected data shape')
-    
-    return thisArray
 
 
 def addInvisibleSubplotToFig(fig, gridSection=None, pos=None):
