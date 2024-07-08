@@ -15,45 +15,43 @@ from . import helpers
 
 
 def _makeCarefulProperty(name: str, keys: list[str] = None):
-        """ Make a property which can only be used in a specific way without 
-        an error being raised. Specifically, the property will raise an 
-        error if...
-            - Called before being set
-            - Set again after already being set
-            - Called but the keys of the returned dict don't match the 
-            input 'keys' (if keys is provided as an input)
+    """ Make a property which can only be used in a specific way without 
+    an error being raised. Specifically, the property will raise an 
+    error if...
+        - Called before being set
+        - Set again after already being set
+        - Called but the keys of the returned dict don't match the 
+        input 'keys' (if keys is provided as an input)
 
-        INPUT
-        name: str. Name to use for the underying attribute. A '_' will be 
-            prepended.
-        keys: list[str]. Optional. The keys that expect in the dict returned 
-            when calling this property.
-        """
-        attrName = '_'+name
+    INPUT
+    name: str. Name to use for the underying attribute. A '_' will be 
+        prepended.
+    keys: list[str]. Optional. The keys that expect in the dict returned 
+        when calling this property.
+    """
+    attrName = '_'+name
 
-        @property
-        def thisProp(self):
-            value = getattr(self, attrName)
-            if value is None:
-                raise ValueError('The {} attribute has not yet been '+
-                                 'set.'.format(name))
-            if (keys is not None) and (set(value.keys()) != set(keys)):
-                raise ValueError('The {} attribute does not have the '+
-                                 'expected keys.'.format(name))
-            return value
-        
-        @thisProp.setter
-        def thisProp(self, value):
-            oldValue = getattr(self, attrName)
-            if oldValue is not None:
-                raise ValueError('The {} attribute cannot be set '+
-                                 'twice.'.format(name))
-            if (keys is not None) and (set(value.keys()) != set(keys)):
-                raise ValueError('The {} attribute does not have the '+
-                                 'expected keys.'.format(name))
-            setattr(self, attrName, value)
+    @property
+    def thisProp(self):
+        value = getattr(self, attrName)
+        if value is None:
+            raise ValueError(f'The {name} attribute has not yet been set.')
+        if (keys is not None) and (set(value.keys()) != set(keys)):
+            raise ValueError(f'The {name} attribute does not have the '+
+                                'expected keys.')
+        return value
+    
+    @thisProp.setter
+    def thisProp(self, value):
+        oldValue = getattr(self, attrName)
+        if oldValue is not None:
+            raise ValueError(f'The {name} attribute cannot be set twice.')
+        if (keys is not None) and (set(value.keys()) != set(keys)):
+            raise ValueError(f'The {name} attribute does not have the '+
+                                'expected keys.')
+        setattr(self, attrName, value)
 
-        return thisProp
+    return thisProp
 
 
 class Formatter():
@@ -110,7 +108,7 @@ class Formatter():
 
             self.data = self.data.drop(columns=drop)
         else:
-            raise ValueError('Provide both ''keep'' and ''drop'' or neither.')
+            raise ValueError('Provide both \'keep\' and \'drop\' or neither.')
 
         grouped = self.data.groupby(within)
         if checkEqual:
@@ -126,7 +124,7 @@ class Formatter():
         self.data = avData
 
 
-    def bin(self, strategy: str, 
+    def dBin(self, strategy: str, 
                 opts: dict, 
                 binName: str,
                 sepFor: None | str | list[str] = None):
@@ -178,14 +176,14 @@ class Formatter():
 
     def _binAll(self, data: pd.DataFrame, strategy: str, opts: dict, 
                   binName: str):
-        """ Perform binning of all input data. Similar functionality to .bin()
+        """ Perform binning of all input data. Similar functionality to .dBin()
         except operates on the input, not on self.data, and cannot perform 
         binning seperately for different subsets of the data.
 
         INPUT
         data: pandas dataframe to perform the binning on. Data is deepcopied
             to ensure no mutation of the input data.
-        strategy, opts, binName: Same as input to the method .bin()
+        strategy, opts, binName: Same as input to the method .dBin()
 
         OUTPUT
         data: pandas dataframe. Copy of the input data with the binning 
@@ -203,8 +201,7 @@ class Formatter():
         
         elif strategy == 'specifiedEdges':
             assert set(opts.keys()) == {'col', 'edges'}
-            relCol = opts['col']
-            data[binName] = pd.cut(data[relCol],
+            data[binName] = pd.cut(data[opts['col']],
                                     bins=opts['edges'],
                                     labels=False)
             assert not np.any(np.isnan(data[binName]))
@@ -214,7 +211,7 @@ class Formatter():
         return data
             
 
-    def runSeriesStats(self, xVar: str, yVar: str, bin: str, 
+    def runSeriesStats(self, xVar: str, yVar: str, dBin: str, 
                        obsID: None | str = None,
                        runPerm: bool = True,
                        checkEqual: bool = True,
@@ -226,7 +223,7 @@ class Formatter():
         xVar: str. Name of column giving the values of the independent 
             variable.
         yVar: str. Name of column giving the values of the dependent variable.
-        bin: str. Name of column giving the bin to which each datapoint 
+        dBin: str. Name of column giving the bin to which each datapoint 
             belongs. Averaging, and statistical tests are performed 
             for each bin. For example, this might give a binned version of the 
             xVar, or xVar itself, if xVar takes discrete values. Data will
@@ -237,35 +234,32 @@ class Formatter():
         obsID: None | str. Only needed if runPerm or checkSame are True. 
             In this case it should be the name of a column giving the 
             independent observation to which each datapoint belongs. 
-            In these cases, bin takes on the more specific meaning of 
+            In these cases, dBin takes on the more specific meaning of 
             identifying the different repeated measurements that make up
             each observeration. E.g. obsID could be a unique identifier for 
             each participant.
         runPerm: bool. If true, run threshold-free cluster based permutation
             tests.
         checkEqual: bool. If true, check that there are the same number
-            of cases in each bin. Must be true if performing cluster based
-            permutation tests. Must be true if runPerm is True.
-        checkSame: bool. If str, should be the name of a column in the
-            dataset giving the independent observation to which each 
-            measurement belongs. In this case check that the same observations 
-            are present in each comparison. Must be true if runPerm is True.
+            of cases in each dBin. Must be true if runPerm is True.
+        checkSame: bool. Check that the same observations (identified through
+            obsID) are present in each comparison. Must be true if runPerm is 
+            True.
         checkOrder: bool. If true, check that when data is ordered following
-            the values of the binning variable ('bin'), than the mean 
+            the values of the binning variable ('dBin'), that the mean 
             x-value increases across bins.
 
         OUTPUT
         stats: dataframe. Gives the results of the statistical tests. 
-            Index is arbitrary. Has the one row for each bin, and the 
+            Index is arbitrary. Has the one row for each dBin, and the 
             following columns...
-                xVar+'_mean': Mean x-value of data in the bin
-                yVar+'_mean': Mean y-value of data in the bin
+                xVar+'_mean': Mean x-value of data in the dBin
+                yVar+'_mean': Mean y-value of data in the dBin
                 yVar+'_SEM': Standard error of the mean y-value
-                yVar+'_sig': (Only present if runPerm is True.) bool. True if y-value
-                    for this bin is significantly different from zero in 
-                    threhsold-free cluster-based permutation test.
+                yVar+'_sig': (Only present if runPerm is True.) bool. True if 
+                    y-value for this dBin is significantly different from zero 
+                    in threhsold-free cluster-based permutation test.
         """
-        # WORKING HERE -- done but read through
         if runPerm:
             assert checkEqual
             assert checkSame
@@ -273,11 +267,11 @@ class Formatter():
             assert obsID
 
         data = deepcopy(self.data)
-        grouped = data.groupby(bin)
+        grouped = data.groupby(dBin)
         if checkEqual:
             checkGroupsEqual(grouped)
         if checkSame:
-            checkSameMeasures(data, obsID, bin)
+            checkSameMeasures(data, obsID, dBin)
 
         xMean, _, xBin = groupedToMeanSd(grouped[xVar])
         yMean, ySem, xBinForY = groupedToMeanSd(grouped[yVar])
@@ -293,14 +287,14 @@ class Formatter():
         }
 
         if obsID is not None:
-            pVals, xBinForP = runSeriesClstTest(self.data, xBin=bin,
+            pVals, xBinForP = runSeriesClstTest(self.data, xBin=dBin,
                                                   yVar=yVar, obsID=obsID)
             assert np.array_equal(xBin, xBinForP)
 
             sig = pVals < 0.05
-            assert sig.shape == stats['Y'].shape
+            assert sig.shape == stats[yVar+'_mean'].shape
             stats[yVar+'_sig'] = sig
-            print('{} of {} bins significant.'.format(np.sum(sig), len(sig)))
+            print(f'{np.sum(sig)} of {len(sig)} bins significant.')
 
         stats = pd.DataFrame(stats)
         return stats
@@ -309,9 +303,9 @@ class Formatter():
     def runMultiStats(self,
                         depVar: str, 
                         avVars: None | str | list[str],
-                        bin: str | list[str],
+                        dBin: str | list[str],
                         checkEqual: bool = True,
-                        checkSame: bool = True,
+                        checkSame: str = None,
                         fdr: bool = True):
         """ Run multiple statistical tests comparing values to zero, before
         performing FDR correction if requested.
@@ -321,12 +315,12 @@ class Formatter():
             that we want to perform statistics on.
         avVars: None | str | list[str]. Names of any columns containing 
             variables that we would like to average (within the bins defined 
-            by bin) but not perform statisitcs on. E.g. could be helpful for 
+            by dBin) but not perform statisitcs on. E.g. could be helpful for 
             determining average values of independent variables.
-        bin: str | list[str]. Name or names of columns in the 
+        dBin: str | list[str]. Name or names of columns in the 
             dataset. Statistics are performed seperately for each unique 
             combination of these variables. That is, each unique combination
-            of these variables defines a bin of data, which which averaging
+            of these variables defines a bin of data, within which averaging
             and a statistical comparison is performed. Results of these 
             multiple individual statistical comparsions are corrected using 
             FDR correction if requested.
@@ -343,14 +337,13 @@ class Formatter():
             Index is arbitrary. Has the one row for each unique combination of
             the bin variables, and the following columns...
                 depVar+'_mean': Gives the mean of the dependent variable within
-                    the bin.
-                depVar+'_sig': Bool. True for for significant points (FDR 
-                    corrected if requested).
+                    the dBin.
+                depVar+'_sig' or depVar+'_fdr_sig': Bool. True for for 
+                    significant points (FDR corrected if requested).
                 Each of the avVars with the suffex '_mean': For each of the 
-                    avVars gives the mean within the bin.
-                Each of the bin vars: The binning variables.
+                    avVars gives the mean within the dBin.
+                Each of the dBin vars: The binning variables.
         """
-        # Really wrote very fast -- check carefully! WORKING HERE
         assert isinstance(depVar, str)
         if avVars is None:
             allAvVars = [depVar]
@@ -362,24 +355,24 @@ class Formatter():
             raise TypeError('Unsupported input')
 
         data = deepcopy(self.data)
-        grouped = data.groupby(bin)
+        grouped = data.groupby(dBin)
         if checkEqual:
             checkGroupsEqual(grouped)
         if checkSame:
-            checkSameMeasures(data, obsID=checkSame, repMeas=bin)
+            checkSameMeasures(data, obsID=checkSame, repMeas=dBin)
 
-        stats = data.groupby(bin).aggregate(lambda df: spStats.ttest_1samp(
+        stats = data.groupby(dBin).aggregate(lambda df: spStats.ttest_1samp(
                                                         df[depVar], 
                                                         popmean=0, 
                                                         axis=None).pvalue)
         assert isinstance(stats, pd.Series)
         stats = stats.rename('pValue').to_frame()
-        helpers.checkDfLevels(stats, indexLvs=bin)
+        helpers.checkDfLevels(stats, indexLvs=dBin)
         assert list(stats.columns) == ['pValue']
         assert stats.dtypes['pValue'] == 'float'
         
         if fdr:
-            stats[depVar+'_sig'], _ = mne.stats.fdr_correction(
+            stats[depVar+'_fdr_sig'], _ = mne.stats.fdr_correction(
                                                             stats['pValue'])
         else:
             stats[depVar+'_sig'] = stats['pValue'] < 0.05
@@ -392,18 +385,25 @@ class Formatter():
         assert list(mean.columns) == allAvVars
         mean = mean.add_suffix('_mean', axis='columns')
 
+        assert len(stats) == len(mean)
         oldLen = len(stats)
         stats = pd.merge(mean, stats,
                             how='inner',
-                            on=bin,
+                            on=dBin,
                             suffixes=(False, False),
                             validate='one_to_one')
-        assert len(stats) == oldLen == len(mean)
-        helpers.checkDfLevels(stats, indexLvs=bin)
+        assert len(stats) == len(mean) == oldLen
+        helpers.checkDfLevels(stats, indexLvs=dBin)
 
         stats = stats.reset_index(allow_duplicates=False)
-        expect = [thisCol+'_mean' for thisCol in allAvVars] + [depVar+'_sig']
-        assert list(stats.columns) == (expect + bin)
+        if fdr:
+            sigCol = depVar + '_fdr_sig'
+        else:
+            sigCol = depVar + '_sig'
+        if isinstance(dBin, str):
+            dBin = [dBin]
+        expect = [thisCol+'_mean' for thisCol in allAvVars] + [sigCol] + dBin
+        assert list(stats.columns) == expect
         return stats
 
 
@@ -433,6 +433,7 @@ class Plotter():
         self.axisLabels = {'xLabel': xLabel, 'yLabel': yLabel}
         self.title = {'txt': titleTxt, 'rotation': titleRot, 
                       'weight': titleWeight}
+        self.ax = None
 
 
     def plot(self, ax):
@@ -462,7 +463,7 @@ class SeriesPlotter(Plotter):
     ATTRIBUTES
     ax: None | axis. Once plotting is performed, the axis used is stored here.
     seriesData: list of dataframe. Same as input to the 
-        constructor.
+        constructor but always a list.
     sColours: list of str. Same as input to the constructor.
     sLabels: list of str. Same as input to the constructor.
     axisLabels: None | dict. Stores the labels for the x- and y-axes.
@@ -497,9 +498,8 @@ class SeriesPlotter(Plotter):
                     error bar from the data point to the top of the error bar.
                     Hence the total length of the error bar will be twice this
                     value.
-                sig: str (optional). The column in giving boolean 
-                    values where true indicates that a data point was 
-                    significant.
+                sig: str (optional). The column giving boolean values where 
+                    true indicates that a data point was significant.
         sColours: list of str. List as long as seriesData, specifying the 
             colour to use for each series.
         sLabels: list of str. List as long as seriesData, specifying the label
@@ -639,6 +639,15 @@ class ColourPlotter(Plotter):
             'cBarCentre': cBarCentre
         }
         self.cBar = None
+
+
+    def plot(self, ax):
+        """ Make the subplot.
+
+        INPUT
+        ax: Axis to plot onto
+        """
+        raise NotImplementedError
 
     
     def findColourRange(self):
@@ -812,7 +821,7 @@ class HeatmapPlotter(ColourPlotter):
         INPUT
         ax: Axis to plot onto
         """
-        data = self.colourData
+        data = deepcopy(self.colourData)
         data = data.pivot(columns='X', index='Y', values='C')
         for axis in [0, 1]:
             data = data.sort_index(axis=axis)
@@ -1172,7 +1181,7 @@ class MultiPlotter():
             elif len(entries) > 1:
                 raise ValueError('self.shared contains a duplicate or an'+
                                  'ambiguously overlapping '+
-                                 'shared {}'.format(thisShare['property']))
+                                 f"shared {thisShare['property']}")
             else:
                 raise AssertionError('Bug')
 
@@ -1418,8 +1427,8 @@ class MultiPlotter():
             labelTxt = [thisPlot.axisLabels[label] for thisPlot in sharePlots]
             labelTxt = np.unique(labelTxt)
             if len(labelTxt) != 1:
-                raise ValueError('{} does not match across plots even though '+
-                                'requested to share.'.format(label))
+                raise ValueError(f'{label} does not match across plots even '+
+                                 'though requested to share.')
             labelTxt = labelTxt[0]
 
         elif label == 'title':
@@ -1909,8 +1918,8 @@ def findCenteredScale(lower, upper, centre):
     newMin = centre - maxDiff
     newMax = centre + maxDiff
 
-    assert(newMin <= lower)
-    assert(newMax >= upper)
+    assert newMin <= lower
+    assert newMax >= upper
     return newMin, newMax
 
 
