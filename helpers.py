@@ -174,3 +174,18 @@ def safeObjToFloat(array):
     newArray = array.astype(np.float64, copy=True)
     assert np.all(np.equal(array, newArray))
     return newArray
+
+
+def removeDimIfNeeded(thisArray):
+    """ Expects either a 1D array, or a 2D array, where the shape of the second
+    dimention is 1. This dimention will then be removed.
+    """
+    if np.ndim(thisArray) == 1:
+        pass
+    elif np.ndim(thisArray) == 2:
+        assert thisArray.shape[1] == 1
+        thisArray = np.squeeze(thisArray, axis=1)
+    else:
+        raise AssertionError('Unexpected data shape')
+    
+    return thisArray
