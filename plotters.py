@@ -1,6 +1,9 @@
 """ Tools for plotting, including for plotting several related plots as part 
 of larger subplots.
 
+HISTORY
+10.07.2024 Read through everything apart from plotLineWithError, findSigEnds,
+    plotHeatmapFromDf
 """
 from copy import deepcopy
 import numpy as np
@@ -411,9 +414,9 @@ class Plotter():
     """ Stores and plots the data for one subplot.
 
     ATTRIBUTES
-    ax: None | axis. Once plotting is performed, the axis used is stored here.
     axisLabels: None | dict. Stores the labels for the x- and y-axes.
     title: None | dict. Stores a complete specification of the plot title.
+    ax: None | axis. Once plotting is performed, the axis used is stored here.
     """
     axisLabels = _makeCarefulProperty('axisLabels', ['xLabel', 'yLabel'])
     title = _makeCarefulProperty('title', ['txt', 'rotaton', 'weight'])
@@ -594,10 +597,12 @@ class ColourPlotter(Plotter):
     on a single subplot.
 
     ATTRIBUTES
-    ax: None | axis. Once plotting is performed, the axis used is stored here.
-    colourData: dict. Same as input to the constructor.
+    cBarSpec: None | dict. Stores a final and complete specification of all the 
+        details required to produce the colour bar associated with the plot. 
     axisLabels: None | dict. Stores the labels for the x- and y-axes.
     title: None | dict. Stores a complete specification of the plot title.
+    ax: None | axis. Once plotting is performed, the axis used is stored here.
+    colourData: dict. Same as input to the constructor.
     draftCBarSpec: None | dict. Stores a draft of the cBarSpec based on user
         requested settings. Should not be used for plotting, but rather a 
         finalised cBarSpec should be created using finaliseCBarSpec. Keys 
@@ -605,8 +610,6 @@ class ColourPlotter(Plotter):
             cLabel: str | None. Label for the colour bar.
             cBarCenter: None | scalar. If not none, colour bar is to be 
                 centred on this value.
-    cBarSpec: None | dict. Stores a complete specification of all the details 
-        required to produce the colour bar associated with the plot. 
     cBar: None or handle of the colourbar associated with the plot, if a 
         colourbar has been plotted.
     """
@@ -663,14 +666,21 @@ class ColourPlotter(Plotter):
         """
         vals = self.colourData['C']
 
-        if len(vals) != 0:
+        if len(vals) > 1:
             cMin = np.min(vals)
             cMax = np.max(vals)
-            for lim in [cMin, cMax]:
-                assert not np.inan(lim)
+        
+        elif len(vals) == 1:
+            vals = vals[0]
+            assert np.ndim(vals) == 0
+            cMax = np.abs(vals)
+            cMin = -cMax
         else:
             cMin = -1
             cMax = 1
+
+        for lim in [cMin, cMax]:
+            assert not np.isnan(lim)
 
         cBarCentre = self.draftCBarSpec['cBarCentre']
         if cBarCentre is not None:
@@ -777,10 +787,12 @@ class HeatmapPlotter(ColourPlotter):
     """ Stores and plots the data for one heatmap in a single subplot.
 
     ATTRIBUTES
-    ax: None | axis. Once plotting is performed, the axis used is stored here.
-    colourData: dict. Same as input to the constructor.
+    cBarSpec: None | dict. Stores a final and complete specification of all the 
+        details required to produce the colour bar associated with the plot. 
     axisLabels: None | dict. Stores the labels for the x- and y-axes.
     title: None | dict. Stores a complete specification of the plot title.
+    ax: None | axis. Once plotting is performed, the axis used is stored here.
+    colourData: dict. Same as input to the constructor.
     draftCBarSpec: None | dict. Stores a draft of the cBarSpec based on user
         requested plotting. Should not be used for plotting, but rather a 
         finalised cBarSpec should be created using finaliseCBarSpec. Keys 
@@ -788,8 +800,8 @@ class HeatmapPlotter(ColourPlotter):
             cLabel: str | None. Label for the colour bar.
             cBarCenter: None | scalar. If not none, colour bar is to be 
                 centred on this value.
-    cBarSpec: None | dict. Stores a complete specification of all the details 
-        required to produce the colour bar associated with the plot. 
+    cBar: None or handle of the colourbar associated with the plot, if a 
+        colourbar has been plotted.
     """
 
     def __init__(self, colourData, xLabel=None, yLabel=None, 
@@ -848,10 +860,12 @@ class BrainPlotter(ColourPlotter):
     subplot.
 
     ATTRIBUTES
-    ax: None | axis. Once plotting is performed, the axis used is stored here.
-    colourData: dict. Same as input to the constructor.
+    cBarSpec: None | dict. Stores a final and complete specification of all the 
+        details required to produce the colour bar associated with the plot. 
     axisLabels: None | dict. Stores the labels for the x- and y-axes.
     title: None | dict. Stores a complete specification of the plot title.
+    ax: None | axis. Once plotting is performed, the axis used is stored here.
+    colourData: dict. Same as input to the constructor.
     draftCBarSpec: None | dict. Stores a draft of the cBarSpec based on user
         requested plotting. Should not be used for plotting, but rather a 
         finalised cBarSpec should be created using finaliseCBarSpec. Keys 
@@ -859,13 +873,13 @@ class BrainPlotter(ColourPlotter):
             cLabel: str | None. Label for the colour bar.
             cBarCenter: None | scalar. If not none, colour bar is to be 
                 centred on this value.
-    cBarSpec: None | dict. Stores a complete specification of all the details 
-        required to produce the colour bar associated with the plot. 
+    cBar: None or handle of the colourbar associated with the plot, if a 
+        colourbar has been plotted.
     fsDir: str. Same as input to constructor.
-    brainLabels: list of MNE label objects. Gives the label objects associated 
-        with the loaded parceltation.
     azimuth: scalar. Same as input to constructor.
     elevation: scalar. Same as input to constructor.
+    brainLabels: list of MNE label objects. Gives the label objects associated 
+        with the loaded parceltation.
     """
     
     def __init__(self, colourData, fsDir, parc, xLabel=None, yLabel=None, 
@@ -986,9 +1000,9 @@ class MultiPlotter():
         specifies one "share". The dict element have keys...
             'property': Specifies which property to share. One of 'title',
                 'xLabel', 'yLabel', 'xAxis', 'yAxis', 'legend', 'colourBar'
-            'tags': list of str. Specifies the plots that the "share" should
-                apply to. All plots with any of the tags in the list are
-                included.
+            'tags': list. List of string or scalar tags. Specifies the plots 
+                that the "share" should apply to. All plots with any of the 
+                tags in the list are included.
             'axis': None | axis instance. Only present if 'property' is 
                 'xAxis' or 'yAxis'. In this case, the first time any item
                 from the group of plots is plotted, its axis is stored here.
@@ -1031,11 +1045,12 @@ class MultiPlotter():
 
             subplotWidth = 1
             leftEdge = 0.9
+            extraColWidth = 0.5
             rightEdge = 0.9
 
             figHeight = headerHeight + footerHeight + (
                                             subplotHeight*gridInfo['plotRows'])
-            figWidth = leftEdge + rightEdge + (
+            figWidth = leftEdge + rightEdge + extraColWidth + (
                                             subplotWidth*gridInfo['plotCols'])
 
             leftFrac = leftEdge/figWidth
@@ -1045,11 +1060,11 @@ class MultiPlotter():
 
             self.fig = plt.figure(figsize=[figWidth, figHeight])
 
-            weights = [1]*(gridInfo['plotCols']+1) 
+            weights = [subplotWidth]*(gridInfo['plotCols']+1) 
             # Extra column for colourbar / legend
-            weights[-1] = 0.5
+            weights[-1] = extraColWidth
 
-            self.grid = GridSpec(gridInfo['plotRows'], gridInfo['plotCols'],
+            self.grid = GridSpec(gridInfo['plotRows'], gridInfo['plotCols']+1,
                             left=leftFrac, bottom=bottomFrac, 
                             right=rightFrac, top=topFrac,
                             width_ratios=weights) 
@@ -1058,19 +1073,19 @@ class MultiPlotter():
         
 
     def addPlot(self, plotter, row, col, endRow=None, endCol=None, tags=None):
-        """ Store all the information for a subplot. Can only be called prior 
-        to calling the perform method, which performs the requested plotting.
+        """ Store all the information for a subplot. Call prior to calling the 
+        perform method, which performs the requested plotting.
 
         INPUT
-        plotter: An instance of a subclass of Plotter. This class takes care
+        plotter: An instance of a subclass of Plotter. MultiPlotter takes care
             of deleting existing labels, colour bars, and legends that become
-            shared. Therefore it is always safest if the Plotter classes
-            first plot their own labels, colour bars, and legends. This makes
+            shared. Therefore it is always safest if the Plotter class
+            first plot its own labels, colour bars, and legends. This makes
             it immediately visible when something hasn't been shared that 
             should have been shared.
         row, col: scalar. Indicies of the first row and columns in the 
             underlying grid that the subplot should occupy
-        endRow, endCol: scalar. Only provide for subplots that span more than 
+        endRow, endCol: scalar. Only required for subplots that span more than 
             one row/column of the underlying grid. One greater (consistent with 
             normal python indexing) than the index of the final row and columns 
             in the underlying grid that the subplot should occupy
@@ -1099,8 +1114,8 @@ class MultiPlotter():
 
     def addShare(self, prop: str, tags: list, pos: dict = None):
         """ Store the information on one property that should be shared 
-        amongst some of the subplots. Can only be called prior to calling the 
-        perform method, which performs the requested plotting.
+        amongst some of the subplots. Call prior to calling the perform method, 
+        which performs the requested plotting.
 
         INPUT
         prop: str. The name of the property to share. Options are...
@@ -1111,13 +1126,13 @@ class MultiPlotter():
             'yLabel': The first plot (as ordered in self.plots) will be the
                 plot that retains its y-labeling, unless pass pos
             'xAxis': Tick-labels will also be removed, apart from on the 
-                final plot(as ordered in self.plots)
+                final plot (as ordered in self.plots)
             'yAxis': Tick-labels will also be removed, apart from on the first
                 plot (as ordered in self.plots)
             'legend': Only Plotters that are also instances of SeriesPlotter 
                 can share legends
-            'colourBar': Only Plotters that are subclasses of ColourPlotter 
-                can share colour bars
+            'colourBar': Only Plotters that are instances of subclasses of 
+                ColourPlotter can share colour bars
         tags: list of string or scalar. Specifies the plots that the "share" 
             should apply to. All plots with any of the tags in the list are
             included.
@@ -1169,7 +1184,7 @@ class MultiPlotter():
         """
         for thisShare in self.shared:
             assert np.all(np.isin(list(thisShare.keys()), 
-                                  ['property', 'tags', 'axis']))
+                                  ['property', 'tags', 'axis', 'pos']))
             assert thisShare['property'] in ['title', 'xLabel', 'yLabel',
                                              'xAxis', 'yAxis',
                                              'legend', 'colourBar']
@@ -1199,7 +1214,7 @@ class MultiPlotter():
             for thisPlot in self.plots:
                 legend = self._findShareEntries('legend', thisPlot['tags'])
                 cBar = self._findShareEntries('colourBar', thisPlot['tags'])
-                if (legend is None) and (cBar is None):
+                if (len(legend) == 0) and (len(cBar) == 0):
                     raise ValueError('A plot has no shared legend or colour '+
                                     'bar associated with it.')
             
@@ -1233,7 +1248,7 @@ class MultiPlotter():
                 for thisPlot in shareColour:
                     thisPlot.finaliseCBarSpec(cMin, cMax)
             else:
-                assert thisShare['property'] in ['xLabel', 'yLabel', 
+                assert thisShare['property'] in ['title', 'xLabel', 'yLabel', 
                                                     'xAxis', 'yAxis', 'legend']
     
 
@@ -1271,7 +1286,7 @@ class MultiPlotter():
                             **shareSpec)
         
         for thisProp in ['xAxis', 'yAxis']:
-            shareEntry = self._findShareEntry('xAxis', thisPlot['tags'])
+            shareEntry = self._findShareEntry(thisProp, thisPlot['tags'])
             if (shareEntry is not None) and (shareEntry['axis'] is None):
                 shareEntry['axis'] = ax
             
@@ -1325,7 +1340,7 @@ class MultiPlotter():
 
         INPUT
         prop: str. The property of the entry we are looking for.
-        tags: list of str. We are interested in any entries with any of the
+        tags: list. We are interested in any entries with any of the
             listed tags.
 
         OUTPUT
@@ -1386,8 +1401,8 @@ class MultiPlotter():
     
 
     def _implementShared(self):
-        """ Impliment the sharing of properties: Remove these properties from
-        the individual subplots and 
+        """ Impliment the sharing of properties: Remove duplicate properties 
+        from the individual subplots and add shared properties as appropriate.
         """
         for thisShare in self.shared:
             if thisShare['property'] in ['title', 'xLabel', 'yLabel']:
@@ -1582,8 +1597,7 @@ def checkSameMeasures(data: pd.DataFrame, obsID: str,
         dataset. Each unique combination defines one repeated measurement.
         Code checks that each observeration has one data point for each of
         these measurements.
-    """
-    # WORKING HERE -- read through 
+    """ 
     data = deepcopy(data)
     data = data.sort_index(axis=0)
     data = data.sort_index(axis=1)
@@ -1608,11 +1622,12 @@ def checkSameMeasures(data: pd.DataFrame, obsID: str,
 
 def groupedToMeanSd(grouped, sort=True):
     """ Takes the grouped version (i.e. groupby applied) of a pandas
-    dataframe with a single column (or a grouped pandas series) and computes 
-    the mean and SEM for each group.
+    dataframe with a single column (or a grouped pandas series) and a single
+    index level and computes the mean and SEM for each group.
 
     INPUT
-    grouped: grouped pandas dataframe.
+    grouped: grouped pandas dataframe. Must have a single column and a single
+        index level.
     sort: bool. If True, return the results sorted in assending order of the
         grouping variable.
 
@@ -1626,6 +1641,8 @@ def groupedToMeanSd(grouped, sort=True):
     if not permitted:
         raise ValueError('Should be groupby of a series or dataframe with '+
                          'single column')
+    if len(grouped().mean.index.names) != 1:
+        raise ValueError('Index should have only one level')
 
     meanDf = grouped.mean()
     if sort:
@@ -1671,7 +1688,6 @@ def runSeriesClstTest(data: pd.DataFrame, xBin: str, yVar: str, obsID: str):
         the repeated measurement to which it corresponds. These values will
         be in assending order.
     """
-    # WORKING HERE -- done but read through
     data = deepcopy(data)
 
     numBins = len(np.unique(data[xBin]))
@@ -1681,7 +1697,6 @@ def runSeriesClstTest(data: pd.DataFrame, xBin: str, yVar: str, obsID: str):
     data = data.set_index([xBin, obsID], verify_integrity=True)
     data = data.sort_index()
     data = data.unstack(xBin)
-
     helpers.checkDfLevels(data, indexLvs=[obsID], colLvs=[xBin])
     
     indexVals = data.index.get_level_values(obsID).to_numpy()
@@ -1689,12 +1704,12 @@ def runSeriesClstTest(data: pd.DataFrame, xBin: str, yVar: str, obsID: str):
     for theseVals, thisExpect in zip([indexVals, colVals], [numObs, numBins]):
         assert len(theseVals) == len(np.unique(theseVals)) == thisExpect
         assert np.all(np.diff(theseVals) > 0)
-    if np.any(pd.isnull(data)) or np.any(np.isnan(data.values)):
+    if np.any(np.isnan(data.to_numpy())):
         raise ValueError('No data may be missing when performing permutation '+
                          'testing on a series.')
 
     _, _, pVals, _ = mne.stats.permutation_cluster_1samp_test(
-                                    data.values,
+                                    data.to_numpy(),
                                     threshold={'start':0, 'step':0.005},
                                     adjacency=None)
     xBinVals = colVals
@@ -1907,6 +1922,7 @@ def addVLines(ax, vLines, addLabels):
                     rotation='vertical',
                     horizontalalignment='right',
                     fontsize=2)
+
 
 def findCenteredScale(lower, upper, centre):
     """ Find a scale that runs from at least lower to upper, but is extended
