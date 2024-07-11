@@ -998,7 +998,7 @@ class MultiPlotter():
                 refer to the plot
     shared: list of dict. Details all the shared properties. Each element
         specifies one "share". The dict element have keys...
-            'property': Specifies which property to share. One of 'title',
+            'property': str. Specifies which property to share. One of 'title',
                 'xLabel', 'yLabel', 'xAxis', 'yAxis', 'legend', 'colourBar'
             'tags': list. List of string or scalar tags. Specifies the plots 
                 that the "share" should apply to. All plots with any of the 
@@ -1112,13 +1112,14 @@ class MultiPlotter():
         self.plots.append(plotSpec) 
 
 
-    def addShare(self, prop: str, tags: list, pos: dict = None):
+    def addShare(self, prop: str | list, tags: list, pos: dict = None):
         """ Store the information on one property that should be shared 
         amongst some of the subplots. Call prior to calling the perform method, 
         which performs the requested plotting.
 
         INPUT
-        prop: str. The name of the property to share. Options are...
+        prop: str | list[str]. The name of the property or properties to share. 
+            Options are...
             'title': The first plot (as ordered in self.plots) will be the
                 plot that retains its title, unless pass pos
             'xLabel': The final plot (as ordered in self.plots) will be the
@@ -1145,6 +1146,17 @@ class MultiPlotter():
                 dict with keys 'row', 'col', 'endRow', 'endCol' to specify the 
                 position of the label in the usual format (see comments for 
                 addPlot)
+        """
+        if isinstance(prop, str):
+            prop = [prop]
+        
+        for thisProp in prop:
+            self._addSingleShare(thisProp, tags, pos)
+
+
+    def _addSingleShare(self, prop: str, tags: list, pos: dict = None):
+        """ Same as addShare but adds a single property at a time. I.e. the 
+        prop input must be a string, and cannot be a list.
         """
         assert isinstance(tags, list)
         sharedSpec = {
