@@ -305,8 +305,8 @@ class Formatter():
 
     def runMultiStats(self,
                         depVar: str, 
-                        avVars: None | str | list[str],
                         dBin: str | list[str],
+                        avVars: None | str | list[str] = None,
                         checkEqual: bool = True,
                         checkSame: str = None,
                         fdr: bool = True):

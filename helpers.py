@@ -133,19 +133,19 @@ def checkDfLevels(df, indexLvs=None, colLvs=None, ignoreOrder=False):
         if ignoreOrder:
             levelInfo[key] = operateIfNotNone(np.sort, val)
         
-    if indexLvs != None:
+    if indexLvs is not None:
         if not np.array_equal(levelInfo['realIdxLvs'], 
                                 levelInfo['exptIdxLvs']):
             raise mkDfLvsException('index', levelInfo['exptIdxLvs'],
                                 levelInfo['realIdxLvs'])
-    if colLvs != None:
+    if colLvs is not None:
         if not np.array_equal(levelInfo['realColLvs'],
                                 levelInfo['exptColLvs']):
             raise mkDfLvsException('columns', levelInfo['exptColLvs'],
                                 levelInfo['realColLvs'])
 
-    if (indexLvs == None) and (colLvs == None):
-        raise Exception("No check was requested")
+    if (indexLvs is None) and (colLvs is None):
+        raise ValueError("No check was requested")
 
 
 def mkDfLvsException(axis, expectedLevels, actualLevels):
