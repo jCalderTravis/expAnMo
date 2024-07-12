@@ -611,8 +611,7 @@ class ColourPlotter(Plotter):
             cLabel: str | None. Label for the colour bar.
             cBarCenter: None | scalar. If not none, colour bar is to be 
                 centred on this value.
-    cBar: None or handle of the colourbar associated with the plot, if a 
-        colourbar has been plotted.
+    cBar: None or handle of the colourbar associated with the plot.
     """
     cBarSpec = _makeCarefulProperty('cBarSpec', ['cMap', 'cNorm', 'cMin', 
                                                  'cMax', 'cLabel'])
@@ -750,6 +749,14 @@ class ColourPlotter(Plotter):
 
         assert self.cBar is None, 'About to overwrite existing colourbar'
         self.cBar = cbar
+
+
+    def removeColourBar(self):
+        """ Remove the colourbar associated with the plot
+        """
+        assert self.cBar is not None
+        self.cBar.remove()
+        self.cBar = None
 
 
     def addColourBarOverPlot(self, ax):
@@ -1020,9 +1027,11 @@ class MultiPlotter():
                     pos is a dict with keys 'row', 'col', 'endRow', 'endCol' 
                     to specify the position of the label in the usual format 
                     (see comments for addPlot)
+    checkAllShare: bool. Same as input to the constructor.
     """
 
-    def __init__(self, gridType: str, gridInfo: dict) -> None:
+    def __init__(self, gridType: str, gridInfo: dict, 
+                 checkAllShare: bool = True) -> None:
         """ Define the grid onto which subplots will later be placed.
 
         INPUT
@@ -1034,7 +1043,10 @@ class MultiPlotter():
                 plotRows: The number of subplot rows
                 plotCols: The number of subplot cols (not counting the column
                     for the legends and/or colour bars)
+        checkAllShare: bool. If True, check at plotting time, that all plots
+            are refered to in a specified legend or colour bar share.
         """
+        self.checkAllShare = checkAllShare
         self.plots = []
         self.shared = []
 
@@ -1171,6 +1183,8 @@ class MultiPlotter():
 
         if prop not in ['title', 'xLabel', 'yLabel', 'legend', 'colourBar']:
             assert pos is None
+        if (prop in ['legend', 'colourBar']) and (pos is None):
+            raise TypeError(f'Must supply a position for the {prop}.')
         
         self.shared.append(sharedSpec)
         self._checkShares(finalCheck=False)
@@ -1225,12 +1239,15 @@ class MultiPlotter():
                 raise ValueError('Tags on plots and tags for shared '+
                                  'properties do not match.')
 
-            for thisPlot in self.plots:
-                legend = self._findShareEntries('legend', thisPlot['tags'])
-                cBar = self._findShareEntries('colourBar', thisPlot['tags'])
-                if (len(legend) == 0) and (len(cBar) == 0):
-                    raise ValueError('A plot has no shared legend or colour '+
-                                    'bar associated with it.')
+            if self.checkAllShare:
+                for thisPlot in self.plots:
+                    legend = self._findShareEntries('legend', 
+                                                    thisPlot['tags'])
+                    cBar = self._findShareEntries('colourBar', 
+                                                  thisPlot['tags'])
+                    if (len(legend) == 0) and (len(cBar) == 0):
+                        raise ValueError('A plot has no shared legend or '
+                                         'colour bar associated with it.')
             
 
     def _prepareColourBars(self):
@@ -1326,9 +1343,9 @@ class MultiPlotter():
         ax: The created axis.
         """
         if endRow is None:
-            endRow = endRow +1
+            endRow = row +1
         if endCol is None:
-            endCol = endCol +1
+            endCol = col +1
 
         gridSec = self.grid[row:endRow, col:endCol]
         shareSpec = {}
@@ -1410,7 +1427,7 @@ class MultiPlotter():
         matches = []
         for thisPlot in self.plots:
             if np.any(np.isin(thisPlot['tags'], tags)):
-                matches.append(thisPlot)
+                matches.append(thisPlot['plotter'])
         return matches
     
 
@@ -1453,13 +1470,16 @@ class MultiPlotter():
         sharePlots = self._findPlotWithTags(tags)
 
         if label in ['xLabel', 'yLabel']:
-            labelTxt = [thisPlot['plotter'].axisLabels[label] 
-                        for thisPlot in sharePlots]
-            labelTxt = np.unique(labelTxt)
-            if len(labelTxt) != 1:
-                raise ValueError(f'{label} does not match across plots even '+
-                                 'though requested to share.')
-            labelTxt = labelTxt[0]
+            labelTxt = [thisPlot.axisLabels[label] for thisPlot in sharePlots]
+            
+            if np.all([thisTxt is None for thisTxt in labelTxt]):
+                labelTxt = None
+            else:
+                labelTxt = np.unique(labelTxt)
+                if len(labelTxt) != 1:
+                    raise ValueError(f'{label} does not match across plots even '+
+                                    'though requested to share.')
+                labelTxt = labelTxt[0]
 
         elif label == 'title':
             errorMsg = 'Requested to share titles that do not match'
@@ -1515,9 +1535,9 @@ class MultiPlotter():
         allTickLabels = []
         for thisPlot in sharePlots:
             if axis == 'xAxis':
-                allTickLabels.append(thisPlot.get_xticklabels())
+                allTickLabels.append(thisPlot.ax.get_xticklabels())
             elif axis == 'yAxis':
-                allTickLabels.append(thisPlot.get_yticklabels())
+                allTickLabels.append(thisPlot.ax.get_yticklabels())
             else:
                 raise ValueError('Unknown option for axis')
         
@@ -1579,7 +1599,7 @@ class MultiPlotter():
         checkSameAttr(sharePlots, 'cBarSpec', errorMsg)
             
         for thisPlot in sharePlots:
-            thisPlot.cBar.remove()
+            thisPlot.removeColourBar()
 
         ax = self._addAxis(row, col, invis=True)
         sharePlots[0].addColourBar(ax)
