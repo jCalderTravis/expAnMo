@@ -62,7 +62,8 @@ class Formatter():
     the format required for making a specific plot.
 
     ATTRIBUTES
-    data: pandas dataframe storing the current version of the dataset
+    data: pandas dataframe storing the current version of the dataset. Index
+        is arbitrary.
     """
 
     def __init__(self, data: pd.DataFrame) -> None:
@@ -364,13 +365,13 @@ class Formatter():
         if checkSame:
             checkSameMeasures(data, obsID=checkSame, repMeas=dBin)
 
-        stats = data.groupby(dBin).aggregate(lambda df: spStats.ttest_1samp(
-                                                        df[depVar], 
-                                                        popmean=0, 
-                                                        axis=None).pvalue)
-        assert isinstance(stats, pd.Series)
-        stats = stats.rename('pValue').to_frame()
-        helpers.checkDfLevels(stats, indexLvs=dBin)
+        def tTestCol(df):
+            assert np.ndim(df) == 1
+            return spStats.ttest_1samp(df, popmean=0, axis=None).pvalue
+
+        stats = data.groupby(dBin).agg(pValue=pd.NamedAgg(
+            column=depVar, aggfunc=tTestCol))
+        helpers.checkDfLevels(stats, indexLvs=[dBin])
         assert list(stats.columns) == ['pValue']
         assert stats.dtypes['pValue'] == 'float'
         
@@ -381,8 +382,7 @@ class Formatter():
             stats[depVar+'_sig'] = stats['pValue'] < 0.05
         stats = stats.drop(columns='pValue')
 
-        mean = grouped.mean()
-        mean = mean[allAvVars]
+        mean = grouped[allAvVars].mean()
         if isinstance(mean, pd.Series):
             mean = mean.to_frame()
         assert list(mean.columns) == allAvVars
@@ -396,7 +396,7 @@ class Formatter():
                             suffixes=(False, False),
                             validate='one_to_one')
         assert len(stats) == len(mean) == oldLen
-        helpers.checkDfLevels(stats, indexLvs=dBin)
+        helpers.checkDfLevels(stats, indexLvs=[dBin])
 
         stats = stats.reset_index(allow_duplicates=False)
         if fdr:
@@ -406,7 +406,8 @@ class Formatter():
         if isinstance(dBin, str):
             dBin = [dBin]
         expect = [thisCol+'_mean' for thisCol in allAvVars] + [sigCol] + dBin
-        assert list(stats.columns) == expect
+        assert set(stats.columns) == set(expect)
+        assert len(np.unique(stats.columns)) == len(stats.columns)
         return stats
 
 
@@ -419,7 +420,7 @@ class Plotter():
     ax: None | axis. Once plotting is performed, the axis used is stored here.
     """
     axisLabels = _makeCarefulProperty('axisLabels', ['xLabel', 'yLabel'])
-    title = _makeCarefulProperty('title', ['txt', 'rotaton', 'weight'])
+    title = _makeCarefulProperty('title', ['txt', 'rotation', 'weight'])
     
     def __init__(self, xLabel=None, yLabel=None, 
                  titleTxt=None, titleRot=0, titleWeight='normal') -> None:
@@ -721,16 +722,16 @@ class ColourPlotter(Plotter):
         if cBarSpec is None:
             cBarSpec = self.cBarSpec
 
-        assert set(cBarSpec.keys()) == set(['cMap', 'cNorm', 'cMin', 'cMax'
+        assert set(cBarSpec.keys()) == set(['cMap', 'cNorm', 'cMin', 'cMax',
                                             'cLabel'])
 
         if self.draftCBarSpec['cBarCentre'] is not None:
             assert self.draftCBarSpec['cBarCentre'] == ((cBarSpec['cMax'] + 
                                                         cBarSpec['cMin']) /2)
             
-        if colourData is not None:
-            assert np.min(colourData.to_array()) >= cBarSpec['cMin']
-            assert np.max(colourData.to_array()) <= cBarSpec['cMax']
+        if (colourData is not None) and (len(colourData) > 0):
+            assert np.min(colourData.to_numpy()) >= cBarSpec['cMin']
+            assert np.max(colourData.to_numpy()) <= cBarSpec['cMax']
 
 
     def addColourBar(self, ax):
@@ -740,7 +741,7 @@ class ColourPlotter(Plotter):
         ax: The axis to use for the colourbar
         """
         cBarSpec = self.cBarSpec
-        assert set(cBarSpec.keys()) == set(['cMap', 'cNorm', 'cMin', 'cMax'
+        assert set(cBarSpec.keys()) == set(['cMap', 'cNorm', 'cMin', 'cMax',
                                             'cLabel'])
 
         scalarMappable, _ = self.makeColourMapper()
@@ -918,7 +919,8 @@ class BrainPlotter(ColourPlotter):
         self.azimuth = azimuth
         self.elevation = elevation
         self.brainLabels = mne.read_labels_from_annot('fsaverage', parc,
-                                                        subjects_dir=fsDir)
+                                                        subjects_dir=fsDir,
+                                                        verbose='warning')
         
 
     def plot(self, ax):
@@ -1272,7 +1274,7 @@ class MultiPlotter():
 
         for thisPlot in self.plots:
             ax = self._addAxisForPlot(thisPlot)
-            thisPlot['Plotter'].plot(ax)
+            thisPlot['plotter'].plot(ax)
 
 
     def _addAxisForPlot(self, thisPlot):
@@ -1361,7 +1363,7 @@ class MultiPlotter():
         """
         entries = []
         for thisShare in self.shared:
-            propMatch = thisShare['proprerty'] == prop
+            propMatch = thisShare['property'] == prop
             tagMatch = np.any(np.isin(tags, thisShare['tags']))
             
             if propMatch and tagMatch:
@@ -1451,7 +1453,8 @@ class MultiPlotter():
         sharePlots = self._findPlotWithTags(tags)
 
         if label in ['xLabel', 'yLabel']:
-            labelTxt = [thisPlot.axisLabels[label] for thisPlot in sharePlots]
+            labelTxt = [thisPlot['plotter'].axisLabels[label] 
+                        for thisPlot in sharePlots]
             labelTxt = np.unique(labelTxt)
             if len(labelTxt) != 1:
                 raise ValueError(f'{label} does not match across plots even '+

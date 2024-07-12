@@ -116,6 +116,10 @@ def checkDfLevels(df, indexLvs=None, colLvs=None, ignoreOrder=False):
         ignoreOrder: boolean. If true, ignore the order of the index and column 
         levels
     """
+    for thisCheck in [indexLvs, colLvs]:
+        if (thisCheck is not None) and isinstance(thisCheck, str):
+            raise TypeError('indexLvs or colLvs is not the correct type')
+
     levelInfo = {
         'exptIdxLvs': indexLvs,
         'realIdxLvs': df.index.names
