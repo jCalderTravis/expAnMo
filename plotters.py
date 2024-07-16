@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as spStats
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
+import matplotlib.gridspec as gridspec
 import matplotlib.cm as mplCm
 import matplotlib.colors as pltColours
 import mne
@@ -745,6 +745,7 @@ class ColourPlotter(Plotter):
 
         scalarMappable, _ = self.makeColourMapper()
         cbar = plt.colorbar(scalarMappable, cax=ax)
+        cbar.outline.set_visible(False)
         cbar.set_label(cBarSpec['cLabel'])
 
         assert self.cBar is None, 'About to overwrite existing colourbar'
@@ -979,12 +980,11 @@ class BrainPlotter(ColourPlotter):
             ax.set_ylabel(self.axisLabels['yLabel'])
 
         ax.set_frame_on(False)
-        ax.tick_params(labelcolor='none', which='both',
-                            top=False, bottom=False, 
-                            left=False, right=False)
+        ax.get_xaxis().set_ticks([])
+        ax.get_yaxis().set_ticks([])
         
-        self.addColourBarOverPlot(ax)
-        self.addTitle(ax)
+        self.addColourBarOverPlot(ax) 
+        self.addTitle(ax) 
         self.ax = ax
 
 
@@ -1038,11 +1038,17 @@ class MultiPlotter():
         gridType: str. The type of grid to produce. Options are...
             'rightSpace': A regular grid with an extra column at the right
                 hand side for colour bars or legends.
+            'rightSpacePaired': Like right space but the columns are in 
+                triplets with two larger and then one smaller. This can be used
+                to generate plots with paired columns that are closer to 
+                each other.
         gridInfo: dict. Detailed specification of the grid. Keys required
             depend on the gridType. For gridType='rightSpace' require...
                 plotRows: The number of subplot rows
                 plotCols: The number of subplot cols (not counting the column
-                    for the legends and/or colour bars)
+                    for the legends and/or colour bars, or the columns
+                    for creating spaces between pairs when using 
+                    gridType='rightSpacePaired')
         checkAllShare: bool. If True, check at plotting time, that all plots
             are refered to in a specified legend or colour bar share.
         """
@@ -1050,22 +1056,37 @@ class MultiPlotter():
         self.plots = []
         self.shared = []
 
-        if gridType == 'rightSpace':
+        if gridType in ['rightSpace', 'rightSpacePaired']:
             assert set(gridInfo.keys()) == set(['plotRows', 'plotCols'])
 
             subplotHeight = 1.5
-            headerHeight = 1.5
-            footerHeight = 0.7
+            headerHeight = 1.1
+            footerHeight = 0.3
 
             subplotWidth = 1
-            leftEdge = 0.9
-            extraColWidth = 0.5
+            extraColWidth = 0.1
+            leftEdge = 1
             rightEdge = 0.9
+
+            if gridType == 'rightSpacePaired':
+                numPairs = np.around(gridInfo['plotCols']/2, 10)
+                if numPairs != int(numPairs):
+                    raise ValueError('For paired columns there must be'
+                                     'an even number of columns.')
+                numPairs = int(numPairs)
+                numGaps = numPairs -1
+                gapWidth = 0.4
+                gridKwargs = {'hspace': 0}
+            else:
+                assert gridType == 'rightSpace'
+                numGaps = 0
+                gapWidth = 0
 
             figHeight = headerHeight + footerHeight + (
                                             subplotHeight*gridInfo['plotRows'])
-            figWidth = leftEdge + rightEdge + extraColWidth + (
-                                            subplotWidth*gridInfo['plotCols'])
+            figWidth = leftEdge + rightEdge + extraColWidth + \
+                (subplotWidth * gridInfo['plotCols']) + \
+                (gapWidth * numGaps)
 
             leftFrac = leftEdge/figWidth
             rightFrac = 1 - (rightEdge/figWidth)
@@ -1074,17 +1095,23 @@ class MultiPlotter():
 
             self.fig = plt.figure(figsize=[figWidth, figHeight])
 
-            weights = [subplotWidth]*(gridInfo['plotCols']+1) 
-            # Extra column for colourbar / legend
+            if gridType == 'rightSpacePaired':
+                weights = [subplotWidth, subplotWidth, gapWidth] * numPairs
+            else:
+                assert gridType == 'rightSpace'
+                weights = [subplotWidth]*(gridInfo['plotCols']+1) 
+                # Extra column for colourbar / legend
             weights[-1] = extraColWidth
 
-            self.grid = GridSpec(gridInfo['plotRows'], gridInfo['plotCols']+1,
-                            left=leftFrac, bottom=bottomFrac, 
-                            right=rightFrac, top=topFrac,
-                            width_ratios=weights) 
+            self.grid = gridspec.GridSpec(gridInfo['plotRows'], 
+                                            gridInfo['plotCols'] + numGaps + 1,
+                                            left=leftFrac, bottom=bottomFrac, 
+                                            right=rightFrac, top=topFrac,
+                                            width_ratios=weights,
+                                            **gridKwargs) 
         else:
             raise ValueError('Unrecognised option')
-        
+
 
     def addPlot(self, plotter, row, col, endRow=None, endCol=None, tags=None):
         """ Store all the information for a subplot. Call prior to calling the 
@@ -1325,7 +1352,8 @@ class MultiPlotter():
 
     
     def _addAxis(self, row, col, endRow=None, endCol=None, 
-                 sharex=None, sharey=None, invis=False):
+                 sharex=None, sharey=None, invis=False,
+                 centreOnly=False):
         """ Add an axis at the specified point on the underlying grid.
 
         INPUT
@@ -1338,6 +1366,8 @@ class MultiPlotter():
             axies will share x- or y- axis with the axes passed as sharex
             or sharey.
         invis: bool. If True, make the created axis invisible.
+        centreOnly: bool. If True, use only a central horizontal band of the
+            area specified using row, col, endRow and endCol.
 
         OUTPUT
         ax: The created axis.
@@ -1353,14 +1383,18 @@ class MultiPlotter():
             shareSpec['sharex'] = sharex
         if sharey is not None:
             shareSpec['sharey'] = sharey
+
+        if centreOnly:
+            fineGrid = gridspec.GridSpecFromSubplotSpec(10, 1, 
+                                                        subplot_spec=gridSec)
+            gridSec = fineGrid[3:7, :]
+
         ax = self.fig.add_subplot(gridSec, **shareSpec)
 
         if invis:
-            ax.tick_params(labelcolor='none', which='both',
-                                top=False, bottom=False, 
-                                left=False, right=False)
-        else:
-            applyDefaultAxisProperties(ax)
+            ax.get_xaxis().set_ticks([])
+            ax.get_yaxis().set_ticks([])
+        applyDefaultAxisProperties(ax, invis)
 
         return ax
         
@@ -1601,7 +1635,8 @@ class MultiPlotter():
         for thisPlot in sharePlots:
             thisPlot.removeColourBar()
 
-        ax = self._addAxis(row, col, invis=True)
+        ax = self._addAxis(row, col, invis=True, centreOnly=True)
+
         sharePlots[0].addColourBar(ax)
 
 
@@ -2158,12 +2193,16 @@ def checkSameAttr(objs, attr, errorMsg=None):
             raise ValueError(errorMsg)
         
 
-def applyDefaultAxisProperties(axis):
+def applyDefaultAxisProperties(axis, invis=False):
     """ Apply some defaults to the appearance of the axes
 
     INPUT
     axis: The axis we want to modify
+    invis: bool. If true use defaults appropriate for an invisible axis
     """
     axis.spines['top'].set_visible(False)
     axis.spines['right'].set_visible(False)
-    axis.axhline(color='k', linewidth=1)
+
+    if invis:
+        axis.spines['left'].set_visible(False)
+        axis.spines['bottom'].set_visible(False)
