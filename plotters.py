@@ -656,7 +656,7 @@ class ColourPlotter(Plotter):
     def findColourRange(self):
         """ Find the smallest colour range that would include all colour 
         data and meet all requirements on the nature of the colour bar.
-        Defaults to -1 to 1 if there is no data to plot.
+        Defaults to -0.001 to 0.001 if there is no data to plot.
 
         OUTPUT
         cMin: scalar. Bottom of the smallest possible colour bar range.
@@ -676,8 +676,8 @@ class ColourPlotter(Plotter):
             cMax = np.abs(vals)
             cMin = -cMax
         else:
-            cMin = -1
-            cMax = 1
+            cMin = -0.001
+            cMax = 0.001
 
         for lim in [cMin, cMax]:
             assert not np.isnan(lim)
@@ -1074,9 +1074,9 @@ class MultiPlotter():
                     raise ValueError('For paired columns there must be'
                                      'an even number of columns.')
                 numPairs = int(numPairs)
-                numGaps = numPairs -1
-                gapWidth = 0.4
-                gridKwargs = {'hspace': 0}
+                numGaps = numPairs
+                gapWidth = 0.5
+                gridKwargs = {'wspace': -0.1}
             else:
                 assert gridType == 'rightSpace'
                 numGaps = 0
@@ -1097,11 +1097,12 @@ class MultiPlotter():
 
             if gridType == 'rightSpacePaired':
                 weights = [subplotWidth, subplotWidth, gapWidth] * numPairs
+                weights.append(extraColWidth) # Extra column for cbar / legend
             else:
                 assert gridType == 'rightSpace'
                 weights = [subplotWidth]*(gridInfo['plotCols']+1) 
                 # Extra column for colourbar / legend
-            weights[-1] = extraColWidth
+                weights[-1] = extraColWidth
 
             self.grid = gridspec.GridSpec(gridInfo['plotRows'], 
                                             gridInfo['plotCols'] + numGaps + 1,
@@ -1392,6 +1393,7 @@ class MultiPlotter():
         ax = self.fig.add_subplot(gridSec, **shareSpec)
 
         if invis:
+            ax.patch.set_visible(False)
             ax.get_xaxis().set_ticks([])
             ax.get_yaxis().set_ticks([])
         applyDefaultAxisProperties(ax, invis)
@@ -1711,7 +1713,7 @@ def groupedToMeanSd(grouped, sort=True):
     if not permitted:
         raise ValueError('Should be groupby of a series or dataframe with '+
                          'single column')
-    if len(grouped().mean.index.names) != 1:
+    if len(grouped.mean().index.names) != 1:
         raise ValueError('Index should have only one level')
 
     meanDf = grouped.mean()
