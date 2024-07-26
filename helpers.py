@@ -44,7 +44,8 @@ def avOutDfLevel(df, avOut):
     return df
 
 
-def trimDfIndex(df: pd.DataFrame, idxLevel: str, win: tuple) -> pd.DataFrame:
+def trimDfIndex(df: pd.DataFrame, idxLevel: str, win: tuple,
+                assertTrim: bool = True) -> pd.DataFrame:
     """ Trim the rows of a dataframe based on the value of one level of the
     index.
 
@@ -55,6 +56,8 @@ def trimDfIndex(df: pd.DataFrame, idxLevel: str, win: tuple) -> pd.DataFrame:
         which the value of the index level idxLevel is greater than or equal
         to the first value of win, and smaller than or equal to the second 
         value.
+    assertTrim: bool. If True check that we will be trimming at least some 
+        data from both ends, otherwise raise an error.
 
     OUTPUT
     df: pandas dataframe. A copy of the input modified accordingly.
@@ -63,6 +66,11 @@ def trimDfIndex(df: pd.DataFrame, idxLevel: str, win: tuple) -> pd.DataFrame:
     assert win[0] < win[1]
     
     vals = df.index.get_level_values(idxLevel).values
+
+    if assertTrim:
+        assert np.min(vals) < win[0]
+        assert np.max(vals) > win[0]
+
     included = np.logical_and(
         vals >= win[0],
         vals <= win[1]

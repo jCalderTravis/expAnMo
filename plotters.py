@@ -671,7 +671,7 @@ class ColourPlotter(Plotter):
             cMax = np.max(vals)
         
         elif len(vals) == 1:
-            vals = vals[0]
+            vals = vals.iloc[0]
             assert np.ndim(vals) == 0
             cMax = np.abs(vals)
             cMin = -cMax
@@ -1065,7 +1065,7 @@ class MultiPlotter():
 
             subplotWidth = 1
             extraColWidth = 0.1
-            leftEdge = 1
+            leftEdge = 1.5
             rightEdge = 0.9
 
             if gridType == 'rightSpacePaired':
