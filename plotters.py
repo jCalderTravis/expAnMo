@@ -621,9 +621,10 @@ class ColourPlotter(Plotter):
                  titleTxt=None, titleRot=0, titleWeight='normal'):
         """
         INPUT
-        colourData: dataframe. Contains the colour data to plot. Has at least
-            the following columns:
-                C: The colour values that will be plotted. All provided data 
+        colourData: dataframe. Contains the data to convert to colours and
+            plot on the heatmap. All provided data will be plotted. Index is 
+            arbitrary. Has the following columns:
+                C: The values to convert to colours and plot. All provided data 
                     will be used to set the range of the colourbar.
         xLabel: str | None. Axis label.
         yLabel: str | None. Axis label.
@@ -818,9 +819,10 @@ class HeatmapPlotter(ColourPlotter):
                     titleTxt=None, titleRot=0, titleWeight='normal'):
         """
         INPUT
-        colourData: dataframe. Contains the colour data to plot. All provided
-            data will be plotted. Has the following columns:
-                C: The colour values that will be plotted. All provided data 
+        colourData: dataframe. Contains the data to convert to colours and
+            plot on the heatmap. All provided data will be plotted. Index is 
+            arbitrary. Has the following columns:
+                C: The values to convert to colours and plot. All provided data 
                     will be used to set the range of the colourbar.
                 X: The x-position associated with each colour value
                 Y: The y-position associated with each colour value
@@ -897,12 +899,13 @@ class BrainPlotter(ColourPlotter):
                  azimuth=0, elevation=0):
         """
         INPUT
-        colourData: dataframe. Contains the colour data to plot. Has at least
-            the following columns:
+        colourData: dataframe. Contains the data to convert to colours and
+            plot on the heatmap. All provided data will be plotted. Index is 
+            arbitrary. Has the following columns:
                 Parc: The string names of the brain parcels to be coloured in.
                     Each must match the name of a left-hemisphiere label in
                     the parcelation specified by the input parc.    
-                C: The colour values that will be plotted. All provided data 
+                C: The values to convert to colours and plot. All provided data 
                     will be used to set the range of the colourbar, and will
                     later be plotted.
         fsDir: str. The freesurfer subjects directory. Will load and use the
@@ -1196,6 +1199,18 @@ class MultiPlotter():
             self._addSingleShare(thisProp, tags, pos)
 
 
+    def perform(self):
+        """ Perform all the requested plotting. The plot should be completely
+        specified using the other methods before calling this method.
+        """
+        self._checkShares()
+        self._prepareColourBars()
+        self._producePlots()
+        self._implementShared()
+
+        return self.fig
+    
+
     def _addSingleShare(self, prop: str, tags: list, pos: dict = None):
         """ Same as addShare but adds a single property at a time. I.e. the 
         prop input must be a string, and cannot be a list.
@@ -1216,18 +1231,6 @@ class MultiPlotter():
         
         self.shared.append(sharedSpec)
         self._checkShares(finalCheck=False)
-
-
-    def perform(self):
-        """ Perform all the requested plotting. The plot should be completely
-        specified using the other methods before calling this method.
-        """
-        self._checkShares()
-        self._prepareColourBars()
-        self._producePlots()
-        self._implementShared()
-
-        return self.fig
 
 
     def _checkShares(self, finalCheck=True):
