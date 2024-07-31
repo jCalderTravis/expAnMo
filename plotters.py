@@ -1020,15 +1020,18 @@ class MultiPlotter():
                 from the group of plots is plotted, its axis is stored here.
                 It can then be refered to, to set up the requested axis 
                 sharing.
-            pos: None | dict. Not None only in the following cases...
+            pos: None | str | dict. Not None only in the following cases...
                 'property' is 'legend' or 'colourBar', then pos is a dict with 
                     keys 'row' and 'col' specifying the position of the legend 
                     or colour bar in the usual format (see comments for 
                     addPlot)
-                'property' is 'title', 'xLabel' or 'yLabel' and want to 
-                    override the default position of the shared label. Then 
-                    pos is a dict with keys 'row', 'col', 'endRow', 'endCol' 
-                    to specify the position of the label in the usual format 
+                'property' is 'title', 'xLabel', 'yLabel', 'xAxis', 'yAxis' and
+                    want to override the default position of the shared label /
+                    tick labels. Then pos is either (a) the string 'first' or
+                    'last', determining whether to put the labels on the first
+                    or last plot (as ordered in self.plots), or (b) a dict with 
+                    keys 'row', 'col', 'endRow', 'endCol' to specify the 
+                    position of the label in the usual format 
                     (see comments for addPlot)
     checkAllShare: bool. Same as input to the constructor.
     """
@@ -1084,6 +1087,7 @@ class MultiPlotter():
                 assert gridType == 'rightSpace'
                 numGaps = 0
                 gapWidth = 0
+                gridKwargs = {}
 
             figHeight = headerHeight + footerHeight + (
                                             subplotHeight*gridInfo['plotRows'])
@@ -1165,16 +1169,16 @@ class MultiPlotter():
         INPUT
         prop: str | list[str]. The name of the property or properties to share. 
             Options are...
-            'title': The first plot (as ordered in self.plots) will be the
-                plot that retains its title, unless pass pos
-            'xLabel': The final plot (as ordered in self.plots) will be the
-                plot that retains its x-labeling, unless pass pos
-            'yLabel': The first plot (as ordered in self.plots) will be the
-                plot that retains its y-labeling, unless pass pos
-            'xAxis': Tick-labels will also be removed, apart from on the 
-                final plot (as ordered in self.plots)
-            'yAxis': Tick-labels will also be removed, apart from on the first
-                plot (as ordered in self.plots)
+            'title': As default the first plot (as ordered in self.plots) will 
+                be the plot that retains its title, unless pass pos
+            'xLabel': As default the final plot (as ordered in self.plots) will 
+                be the plot that retains its x-labeling, unless pass pos
+            'yLabel': As default the first plot (as ordered in self.plots) will 
+                be the plot that retains its y-labeling, unless pass pos
+            'xAxis': Tick-labels will also be removed, apart from (as default) 
+                on the final plot (as ordered in self.plots)
+            'yAxis': Tick-labels will also be removed, apart from on (as 
+                default) the first plot (as ordered in self.plots)
             'legend': Only Plotters that are also instances of SeriesPlotter 
                 can share legends
             'colourBar': Only Plotters that are instances of subclasses of 
@@ -1182,7 +1186,7 @@ class MultiPlotter():
         tags: list of string or scalar. Specifies the plots that the "share" 
             should apply to. All plots with any of the tags in the list are
             included.
-        pos: None | dict. Only provide in the following cases...
+        pos: None | str | dict. Only provide in the following cases...
             Prop is 'legend' or 'colourBar', then pos a dict with keys 
                 'row' and 'col' specifying the position of the legend or colour 
                 bar in the usual format (see comments for addPlot)
@@ -1191,6 +1195,12 @@ class MultiPlotter():
                 dict with keys 'row', 'col', 'endRow', 'endCol' to specify the 
                 position of the label in the usual format (see comments for 
                 addPlot)
+            Prop is 'xLabel' or 'xAxis', want to override the default 
+                position of the label / tick labels, and simply want to move
+                the label / tick labels to the first plot (instead of being on 
+                the final plot as default). Then pos should be the string 
+                'first' or 'last' to specify on which plot to have the 
+                label / tick labels
         """
         if isinstance(prop, str):
             prop = [prop]
@@ -1211,7 +1221,8 @@ class MultiPlotter():
         return self.fig
     
 
-    def _addSingleShare(self, prop: str, tags: list, pos: dict = None):
+    def _addSingleShare(self, prop: str, tags: list, 
+                        pos: None | str | dict = None):
         """ Same as addShare but adds a single property at a time. I.e. the 
         prop input must be a string, and cannot be a list.
         """
@@ -1221,13 +1232,17 @@ class MultiPlotter():
             'tags': tags,
             'pos': pos
         }
+
         if prop in ['xAxis', 'yAxis']:
             sharedSpec['axis'] = None
 
-        if prop not in ['title', 'xLabel', 'yLabel', 'legend', 'colourBar']:
-            assert pos is None
-        if (prop in ['legend', 'colourBar']) and (pos is None):
+        if (prop in ['title', 'yLabel', 'yAxis']) and (pos is None):
+            sharedSpec['pos'] = 'first'
+        elif (prop in ['xLabel', 'xAxis']) and (pos is None):
+            sharedSpec['pos'] = 'last'
+        elif (prop in ['legend', 'colourBar']) and (pos is None):
             raise TypeError(f'Must supply a position for the {prop}.')
+        assert sharedSpec['pos'] is not None
         
         self.shared.append(sharedSpec)
         self._checkShares(finalCheck=False)
@@ -1480,7 +1495,8 @@ class MultiPlotter():
                                   thisShare['pos'])
             
             elif thisShare['property'] in ['xAxis', 'yAxis']:
-                self._shareTicks(thisShare['property'], thisShare['tags'])
+                self._shareTicks(thisShare['property'], thisShare['tags'],
+                                 thisShare['pos'])
 
             elif thisShare['property'] == 'legend':
                 self._shareLegend(thisShare['tags'], **thisShare['pos'])
@@ -1492,7 +1508,7 @@ class MultiPlotter():
                 raise ValueError('Unrecognised property')
         
     
-    def _shareLabels(self, label, tags, pos=None):
+    def _shareLabels(self, label, tags, pos):
         """ Remove duplicated title, x- or y-labels from a group of plots. An 
         error is raised if the existing labels do not match.
 
@@ -1500,11 +1516,12 @@ class MultiPlotter():
         label: str. 'title', 'xLabel' or 'yLabel'.
         tags: list[str]. List of tags identifying the plots that we want to 
             remove duplicate labels from.
-        pos: dict. If provided remove all titles, x- or y-labels and place a 
-            new label in the position specified. (Default behaviour is to 
-            remove all but one of the original labels.) pos has the keys 
-            row, col, endRow, endCol, which have the usual meanings (see 
-            comments for addPlot).
+        pos: str | dict. If str, should be either 'first' or 'last', to 
+            determine on which plot (as ordered in self.plots) to leave the 
+            tick labels. Alternatively, if a dict, all labels are removed and 
+            the dict specifies the location for a new label. In this case pos 
+            has the keys row, col, endRow, endCol, which have the usual 
+            meanings (see comments for addPlot).
         """
         sharePlots = self._findPlotWithTags(tags)
 
@@ -1526,13 +1543,13 @@ class MultiPlotter():
         else:
             raise ValueError('Unrecognised option for label')
 
-        if pos is None:
-            if label == 'xLabel':
+        if isinstance(pos, str):
+            if pos == 'last':
                 toRemove = sharePlots[:-1]
-            elif label in ['title', 'yLabel']:
+            elif pos == 'first':
                 toRemove = sharePlots[1:]
             else:
-                raise ValueError('Unrecognised option for label')
+                raise ValueError('Unrecognised option for position')
         else:
             toRemove = sharePlots
 
@@ -1546,7 +1563,7 @@ class MultiPlotter():
             else:
                 raise AssertionError('Bug')
 
-        if pos is not None:
+        if not isinstance(pos, str):
             assert set(pos.keys()) == set(['row', 'col', 'endRow', 'endCol'])
             ax = self._addAxis(**pos, invis=True)
 
@@ -1560,7 +1577,7 @@ class MultiPlotter():
                 raise AssertionError('Bug')
 
 
-    def _shareTicks(self, axis, tags):
+    def _shareTicks(self, axis, tags, pos):
         """ Remove duplicated x- or y-tick labels from a group of plots. An 
         error is raised if the existing labels do not match.
 
@@ -1568,6 +1585,8 @@ class MultiPlotter():
         axis: str. 'xAxis' or 'yAxis'.
         tags: list[str]. List of tags identifying the plots that we want to 
             remove duplicate labels from.
+        pos: str. 'first' or 'last'. On which plot (as ordered in self.plots)
+            to leave the tick labels.
         """
         sharePlots = self._findPlotWithTags(tags)
 
@@ -1583,12 +1602,12 @@ class MultiPlotter():
         for theseLabels in allTickLabels:
             checkTickLabelsMatch(allTickLabels[0], theseLabels)
 
-        if axis == 'xAxis':
+        if pos == 'last':
             toRemove = sharePlots[:-1]
-        elif axis == 'yAxis':
+        elif pos == 'first':
             toRemove = sharePlots[1:]
         else:
-            raise ValueError('Unrecognised option for axis')
+            raise ValueError('pos should be \'first\' or \'last\'')
         
         for thisPlot in toRemove:
             if axis == 'xAxis':
