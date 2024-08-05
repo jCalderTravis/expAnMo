@@ -1037,7 +1037,8 @@ class MultiPlotter():
     """
 
     def __init__(self, gridType: str, gridInfo: dict, 
-                 checkAllShare: bool = True) -> None:
+                 checkAllShare: bool = True,
+                 sizes: None | dict = None) -> None:
         """ Define the grid onto which subplots will later be placed.
 
         INPUT
@@ -1057,22 +1058,43 @@ class MultiPlotter():
                     gridType='rightSpacePaired')
         checkAllShare: bool. If True, check at plotting time, that all plots
             are refered to in a specified legend or colour bar share.
+        sizes: None | dict. Optionally provide a dict with any subset of the 
+            following keys to override default sizing of the plots.
+                subplotHeight: Height of each subplot
+                headerHeight: Height of space above the top plot
+                footerHeight: Height of space below the bottom plot
+                subplotWidth: Width of each subplot
+                extraColWidth: Width of the extra column in the 'rightSpace'
+                    and 'rightSpacePaired' gridTypes
+                leftEdge: Width of the space left of the leftmost plot
+                rightEdge: Width of the space right of the rightmost plot
+                gapWidth: Width of the smaller columns in the rightSpacePaired
+                    grid type
         """
         self.checkAllShare = checkAllShare
         self.plots = []
         self.shared = []
 
+        if sizes is None:
+            sizes = dict()
+        else:
+            permittedSizes = ['subplotHeight', 'headerHeight', 'footerHeight',
+                              'subplotWidth', 'extraColWidth',
+                              'leftEdge', 'rightEdge',
+                              'gapWidth']
+            assert np.all(np.isin(list(sizes.keys()), permittedSizes))
+
         if gridType in ['rightSpace', 'rightSpacePaired']:
             assert set(gridInfo.keys()) == set(['plotRows', 'plotCols'])
 
-            subplotHeight = 1.5
-            headerHeight = 1.1
-            footerHeight = 0.3
+            setIfMissing(sizes, 'subplotHeight', 1.5)
+            setIfMissing(sizes, 'headerHeight', 1.1)
+            setIfMissing(sizes, 'footerHeight', 0.3)
 
-            subplotWidth = 1
-            extraColWidth = 0.1
-            leftEdge = 1.5
-            rightEdge = 0.9
+            setIfMissing(sizes, 'subplotWidth', 1)
+            setIfMissing(sizes, 'extraColWidth', 0.1)
+            setIfMissing(sizes, 'leftEdge', 1.5)
+            setIfMissing(sizes, 'rightEdge', 0.9)
 
             if gridType == 'rightSpacePaired':
                 numPairs = np.around(gridInfo['plotCols']/2, 10)
@@ -1081,35 +1103,38 @@ class MultiPlotter():
                                      'an even number of columns.')
                 numPairs = int(numPairs)
                 numGaps = numPairs
-                gapWidth = 0.5
+                setIfMissing(sizes, 'gapWidth', 0.5)
                 gridKwargs = {'wspace': -0.1}
             else:
                 assert gridType == 'rightSpace'
                 numGaps = 0
-                gapWidth = 0
+                setIfMissing(sizes, 'gapWidth', 0)
                 gridKwargs = {}
 
-            figHeight = headerHeight + footerHeight + (
-                                            subplotHeight*gridInfo['plotRows'])
-            figWidth = leftEdge + rightEdge + extraColWidth + \
-                (subplotWidth * gridInfo['plotCols']) + \
-                (gapWidth * numGaps)
+            figHeight = sizes['headerHeight'] + sizes['footerHeight'] + (
+                sizes['subplotHeight']*gridInfo['plotRows'])
+            figWidth = sizes['leftEdge'] + sizes['rightEdge'] + \
+                sizes['extraColWidth'] + \
+                (sizes['subplotWidth'] * gridInfo['plotCols']) + \
+                (sizes['gapWidth'] * numGaps)
 
-            leftFrac = leftEdge/figWidth
-            rightFrac = 1 - (rightEdge/figWidth)
-            topFrac = 1 - (headerHeight/figHeight)
-            bottomFrac = footerHeight/figHeight
+            leftFrac = sizes['leftEdge']/figWidth
+            rightFrac = 1 - (sizes['rightEdge']/figWidth)
+            topFrac = 1 - (sizes['headerHeight']/figHeight)
+            bottomFrac = sizes['footerHeight']/figHeight
 
             self.fig = plt.figure(figsize=[figWidth, figHeight])
 
             if gridType == 'rightSpacePaired':
-                weights = [subplotWidth, subplotWidth, gapWidth] * numPairs
-                weights.append(extraColWidth) # Extra column for cbar / legend
+                weights = [sizes['subplotWidth'], sizes['subplotWidth'], 
+                           sizes['gapWidth']] * numPairs
+                weights.append(sizes['extraColWidth']) 
+                # Extra column for cbar / legend
             else:
                 assert gridType == 'rightSpace'
-                weights = [subplotWidth]*(gridInfo['plotCols']+1) 
+                weights = [sizes['subplotWidth']]*(gridInfo['plotCols']+1) 
                 # Extra column for colourbar / legend
-                weights[-1] = extraColWidth
+                weights[-1] = sizes['extraColWidth']
 
             self.grid = gridspec.GridSpec(gridInfo['plotRows'], 
                                             gridInfo['plotCols'] + numGaps + 1,
@@ -1662,6 +1687,17 @@ class MultiPlotter():
         ax = self._addAxis(row, col, invis=True, centreOnly=True)
 
         sharePlots[0].addColourBar(ax)
+
+
+def setIfMissing(thisDict, thisKey, thisValue):
+    """ Add a key and value to a dict, but only if the key is currently missing
+    from the dict. 
+
+    OUTPUT
+    None. Dict is modified in place.
+    """
+    if not thisKey in thisDict:
+        thisDict[thisKey] = thisValue
 
 
 def checkGroupsEqual(grouped):
