@@ -1008,6 +1008,8 @@ class MultiPlotter():
                 in the underlying grid that the subplot should occupy
             tags: list. List of string or scalar tags that can be used to 
                 refer to the plot
+            aspect: None | scalar. If not None, impose the specified aspect
+                ratio for the axes of this plot.
     shared: list of dict. Details all the shared properties. Each element
         specifies one "share". The dict element have keys...
             'property': str. Specifies which property to share. One of 'title',
@@ -1087,13 +1089,13 @@ class MultiPlotter():
         if gridType in ['rightSpace', 'rightSpacePaired']:
             assert set(gridInfo.keys()) == set(['plotRows', 'plotCols'])
 
-            setIfMissing(sizes, 'subplotHeight', 1.5)
-            setIfMissing(sizes, 'headerHeight', 1.1)
-            setIfMissing(sizes, 'footerHeight', 0.3)
+            setIfMissing(sizes, 'subplotHeight', 1)
+            setIfMissing(sizes, 'headerHeight', 1)
+            setIfMissing(sizes, 'footerHeight', 1)
 
             setIfMissing(sizes, 'subplotWidth', 1)
+            setIfMissing(sizes, 'leftEdge', 1)
             setIfMissing(sizes, 'extraColWidth', 0.1)
-            setIfMissing(sizes, 'leftEdge', 1.5)
             setIfMissing(sizes, 'rightEdge', 0.9)
 
             if gridType == 'rightSpacePaired':
@@ -1146,7 +1148,8 @@ class MultiPlotter():
             raise ValueError('Unrecognised option')
 
 
-    def addPlot(self, plotter, row, col, endRow=None, endCol=None, tags=None):
+    def addPlot(self, plotter, row, col, endRow=None, endCol=None, tags=None,
+                aspect=None):
         """ Store all the information for a subplot. Call prior to calling the 
         perform method, which performs the requested plotting.
 
@@ -1166,6 +1169,8 @@ class MultiPlotter():
         tags: None | list. List of string or scalar tags. This plot can latter
             be refered to using any of its tags. If None is passed, an empty
             list will be stored for tags.
+        aspect: None | scalar. If not None, impose the specified aspect ratio
+            for the axes of this plot.
         """
         if endRow is None:
             endRow = row +1
@@ -1181,7 +1186,8 @@ class MultiPlotter():
             'col': col,
             'endRow': endRow,
             'endCol': endCol,
-            'tags': tags
+            'tags': tags,
+            'aspect': aspect
         }
         self.plots.append(plotSpec) 
 
@@ -1386,6 +1392,8 @@ class MultiPlotter():
         ax = self._addAxis(thisPlot['row'], thisPlot['col'],
                             thisPlot['endRow'], thisPlot['endCol'],
                             **shareSpec)
+        if thisPlot['aspect'] is not None:
+            ax.set_aspect(aspect=thisPlot['aspect'], adjustable='box')
         
         for thisProp in ['xAxis', 'yAxis']:
             shareEntry = self._findShareEntry(thisProp, thisPlot['tags'])
