@@ -5,6 +5,7 @@ HISTORY
 10.07.2024 Read through everything apart from plotLineWithError, findSigEnds,
     plotHeatmapFromDf
 """
+import os
 from copy import deepcopy
 import numpy as np
 import pandas as pd
@@ -13,6 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.cm as mplCm
 import matplotlib.colors as pltColours
+from matplotlib.backends.backend_pdf import PdfPages
 import mne
 from . import helpers
 
@@ -857,7 +859,7 @@ class HeatmapPlotter(ColourPlotter):
         cBarSpec['cMap'] = self.cBarSpec['cMap']
         _, cBarSpec['cNorm'] = self.makeColourMapper()
 
-        plotHeatmapFromDf(data, unevenAllowed=True, plotFun='pcolormesh',
+        plotHeatmapFromDf(data, unevenAllowed=True,
                             ax=ax, cbarMode='predef', cbarSpec=cBarSpec,
                             xLabel=self.axisLabels['xLabel'],
                             yLabel=self.axisLabels['yLabel'])
@@ -2077,7 +2079,7 @@ def findCenteredScale(lower, upper, centre):
     return newMin, newMax
 
 
-def plotHeatmapFromDf(df, unevenAllowed=False, plotFun='pcolormesh', 
+def plotHeatmapFromDf(df, unevenAllowed=False,
                         xLabel=None, yLabel=None, cLabel=None,
                         xtickVals=None, ytickVals=None,
                         ax=None, cbarMode='auto', 
@@ -2092,9 +2094,6 @@ def plotHeatmapFromDf(df, unevenAllowed=False, plotFun='pcolormesh',
         x-values in the heatmap 
     unevenAllowed: boolean. Allow the values for the x or y axis to be 
         unevenly spaced? The plot will take the spacing into account.
-    plotFun: string. Either 'pcolormesh' or 'imshow'. Determines which 
-        matplotlib function to use for plotting. Must use 'pcolormesh' if  
-        unevenAllowed=True
     xLabel and yLabel: str | None
     cLabel: string | None. Sets label for colour bar
     xtickVals and ytickVals: numpy arrays specifying the locations of the 
@@ -2102,7 +2101,8 @@ def plotHeatmapFromDf(df, unevenAllowed=False, plotFun='pcolormesh',
     ax: axis to plot on to. If none provided, creates new figure.
     cbarMode: 'auto' | 'predef'. Whether to automatically determine the 
         colourbar range to include all data, or to use a predefined scale
-    cbarSpec: dict. Required keys depend on cbarMode. Always require...
+    cbarSpec: dict. Optional if cbarMode is 'auto'. Required keys depend on 
+        cbarMode. Always require...
             cMap: str. Colourmap to use
             addCBar: bool. Whether to add a colourbar
         If cbarmode is 'auto' then addionally require...
@@ -2134,10 +2134,6 @@ def plotHeatmapFromDf(df, unevenAllowed=False, plotFun='pcolormesh',
         assert specs == ['addCBar', 'cMap', 'cNorm']
     else:
         raise ValueError('Unexpected input')
-
-    if unevenAllowed and (plotFun != 'pcolormesh'):
-        raise ValueError('Must use plotFun=\'pcolormesh\' if '+ 
-                         'unevenAllowed=True')
 
     df = df.sort_index(axis=0)
     df = df.sort_index(axis=1)
@@ -2176,49 +2172,15 @@ def plotHeatmapFromDf(df, unevenAllowed=False, plotFun='pcolormesh',
     # Do the plotting ...
     # TODO I always find orientation/order of labels on colourmaps so confusing.
     # Need to check charefully I got the order correct.
-    if plotFun == 'imshow':
-
-        # TODO -- this option delete
-        axIm = ax.imshow(cVals, origin='lower', 
+    axIm = ax.pcolormesh(xVals, yVals, cVals, 
+                            shading='nearest', 
                             cmap=cbarSpec['cMap'], 
                             norm=cbarNorm)
-
-        # How far along the axis should each tick go, as a fraction
-        # TODO Not to confident that the ticks have been set correctly 
-        computeFrac = lambda tickVals, allVals : ((tickVals - np.min(allVals)) 
-                                        / (np.max(allVals) - np.min(allVals)))
-        if xtickVals is not None:
-            xtickFrac = computeFrac(xtickVals, xVals)
-        if ytickVals is not None:
-            ytickFrac = computeFrac(ytickVals, yVals) 
-
-        # Convert fraction into the units used by imshow (number of data 
-        # points along)
-        computePos = lambda tickFrac, allVals: tickFrac * (len(allVals)-1)
-        if xtickVals is not None:
-            xtickPos = computePos(xtickFrac, xVals) 
-        if ytickVals is not None:
-            ytickPos = computePos(ytickFrac, yVals) 
-        
-        if xtickVals is not None:    
-            ax.set_xticks(xtickPos) 
-            ax.set_xticklabels(xtickVals)
-        if ytickVals is not None:
-            ax.set_yticks(ytickPos) 
-            ax.set_yticklabels(ytickVals)
-
-    elif plotFun == 'pcolormesh':
-        axIm = ax.pcolormesh(xVals, yVals, cVals, 
-                                shading='nearest', 
-                                cmap=cbarSpec['cMap'], 
-                                norm=cbarNorm)
-        
-        if xtickVals is not None:    
-            ax.set_xticks(xtickVals) 
-        if ytickVals is not None:
-            ax.set_yticks(ytickVals)
-    else:
-        raise ValueError('Requested plotFun not recognised.') 
+    
+    if xtickVals is not None:    
+        ax.set_xticks(xtickVals) 
+    if ytickVals is not None:
+        ax.set_yticks(ytickVals)
 
     if cbarSpec['addCBar']:
         colourBar = plt.colorbar(axIm, ax=ax)
@@ -2274,3 +2236,38 @@ def applyDefaultAxisProperties(axis, invis=False):
     if invis:
         axis.spines['left'].set_visible(False)
         axis.spines['bottom'].set_visible(False)
+
+
+def saveFigAndClose(saveName, thisDPI=600, figsToSave=None):
+    """ Saves a figure or figures, and then closes them.
+    
+    INPUT
+    saveName: String. Including full path to directory. Extension (e.g. .pdf) 
+    will be added if required, but may also be provided as part of saveName.
+    figsToSave: Figure object, or list of these. Optional. If none provided, 
+    saves the current figure. If list of figures, saves all to a single pdf
+    """
+    # Add extension if there is none
+    _, ext = os.path.splitext(saveName)
+    if not ext:
+        ext = '.pdf'
+        saveName += ext
+
+    if figsToSave is None:
+        plt.savefig(saveName, dpi=thisDPI)
+        plt.close()
+
+    elif isinstance(figsToSave, list):
+        if ext != '.pdf':
+            raise NotImplementedError('Under this setting can only save a pdf')
+
+        combinedPdf = PdfPages(saveName)
+        for fig in figsToSave:
+            combinedPdf.savefig(fig)
+        combinedPdf.close()
+
+        for fig in figsToSave:
+            plt.close(fig)
+    else:
+        figsToSave.savefig(saveName, dpi=thisDPI)
+        plt.close(figsToSave)

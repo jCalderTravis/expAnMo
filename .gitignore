@@ -1,2 +1,3 @@
 /.vscode/*
 /__pycache__/*
+/__test_results__/*
