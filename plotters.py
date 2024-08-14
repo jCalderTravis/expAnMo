@@ -459,7 +459,8 @@ class Plotter():
         """
         ax.set_title(self.title['txt'],
                      rotation=self.title['rotation'],
-                     fontweight=self.title['weight'])
+                     fontweight=self.title['weight'],
+                     multialignment='left')
     
 
 class SeriesPlotter(Plotter):
@@ -1407,7 +1408,7 @@ class MultiPlotter():
     
     def _addAxis(self, row, col, endRow=None, endCol=None, 
                  sharex=None, sharey=None, invis=False,
-                 centreOnly=False):
+                 centreOnly=False, tickSpace=False):
         """ Add an axis at the specified point on the underlying grid.
 
         INPUT
@@ -1422,6 +1423,12 @@ class MultiPlotter():
         invis: bool. If True, make the created axis invisible.
         centreOnly: bool. If True, use only a central horizontal band of the
             area specified using row, col, endRow and endCol.
+        tickSpace: bool. Only has an effect if invis=True. In this case code
+            tries to generates axes with inivsible ticks, instead of no ticks.
+            This can be helpful if will use the generated axes to position a
+            shared x- or y-label. Invisible ticks are helpful so that the 
+            x- or y-label is pushed away from areas where visible ticks might
+            be present.
 
         OUTPUT
         ax: The created axis.
@@ -1447,8 +1454,15 @@ class MultiPlotter():
 
         if invis:
             ax.patch.set_visible(False)
-            ax.get_xaxis().set_ticks([])
-            ax.get_yaxis().set_ticks([])
+
+            if tickSpace:
+                ax.tick_params(labelcolor='none', which='both', 
+                                top=False, bottom=False, 
+                                left=False, right=False)
+            else:
+                ax.get_xaxis().set_ticks([])
+                ax.get_yaxis().set_ticks([])
+
         applyDefaultAxisProperties(ax, invis)
 
         return ax
@@ -1600,7 +1614,7 @@ class MultiPlotter():
 
         if not isinstance(pos, str):
             assert set(pos.keys()) == set(['row', 'col', 'endRow', 'endCol'])
-            ax = self._addAxis(**pos, invis=True)
+            ax = self._addAxis(**pos, invis=True, tickSpace=True)
 
             if label == 'xLabel':
                 ax.set_xlabel(labelTxt)
@@ -2169,9 +2183,6 @@ def plotHeatmapFromDf(df, unevenAllowed=False,
     else:
         raise ValueError('Unrecognised input')
 
-    # Do the plotting ...
-    # TODO I always find orientation/order of labels on colourmaps so confusing.
-    # Need to check charefully I got the order correct.
     axIm = ax.pcolormesh(xVals, yVals, cVals, 
                             shading='nearest', 
                             cmap=cbarSpec['cMap'], 

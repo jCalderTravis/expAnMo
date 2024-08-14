@@ -3,7 +3,10 @@ import pandas as pd
 from . import plotters
 
 currentPath = os.path.dirname(os.path.realpath(__file__))
-testResultsDir = os.path.join(currentPath, '__test_results__')
+testResultsDir = os.path.join(currentPath, '.test_results')
+
+if not os.path.exists(testResultsDir):
+    os.mkdir(testResultsDir)
 
 def test_plotHeatmapFromDf():
     """ Saves a plot in the folder given by the varaible testResultsDir. The 
