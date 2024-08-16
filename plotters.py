@@ -417,10 +417,13 @@ class Plotter():
     """ Stores and plots the data for one subplot.
 
     ATTRIBUTES
+    mayShareAx: bool. If true plotting using axes that are shared with other
+        subplots is ok.
     axisLabels: None | dict. Stores the labels for the x- and y-axes.
     title: None | dict. Stores a complete specification of the plot title.
     ax: None | axis. Once plotting is performed, the axis used is stored here.
     """
+    mayShareAx = False
     axisLabels = _makeCarefulProperty('axisLabels', ['xLabel', 'yLabel'])
     title = _makeCarefulProperty('title', ['txt', 'rotation', 'weight'])
     
@@ -468,6 +471,8 @@ class SeriesPlotter(Plotter):
     subplot.
 
     ATTRIBUTES
+    mayShareAx: bool. If true plotting using axes that are shared with other
+        subplots is ok.
     ax: None | axis. Once plotting is performed, the axis used is stored here.
     seriesData: list of dataframe. Same as input to the 
         constructor but always a list.
@@ -482,6 +487,7 @@ class SeriesPlotter(Plotter):
             'label': list of str. Labels for the entries in the legend.
             'colour': list of str. Colours for the entries in the legend.
     """
+    mayShareAx = True
     # Make sure the colours, labels and legend can only be set once, so that
     # they don't accidentaly come out of sync with each other (or with
     # the legends of other plots, if plotting multiple subplots)
@@ -601,6 +607,8 @@ class ColourPlotter(Plotter):
     on a single subplot.
 
     ATTRIBUTES
+    mayShareAx: bool. If true plotting using axes that are shared with other
+        subplots is ok.
     cBarSpec: None | dict. Stores a final and complete specification of all the 
         details required to produce the colour bar associated with the plot. 
     axisLabels: None | dict. Stores the labels for the x- and y-axes.
@@ -614,13 +622,14 @@ class ColourPlotter(Plotter):
             cLabel: str | None. Label for the colour bar.
             cBarCenter: None | scalar. If not none, colour bar is to be 
                 centred on this value.
+            cMap: str. The colour map to use.
     cBar: None or handle of the colourbar associated with the plot.
     """
     cBarSpec = _makeCarefulProperty('cBarSpec', ['cMap', 'cNorm', 'cMin', 
                                                  'cMax', 'cLabel'])
 
     def __init__(self, colourData, xLabel=None, yLabel=None, 
-                 cLabel=None, cBarCentre=None,
+                 cLabel=None, cBarCentre=None, cMap='RdBu_r',
                  titleTxt=None, titleRot=0, titleWeight='normal'):
         """
         INPUT
@@ -634,6 +643,7 @@ class ColourPlotter(Plotter):
         cLabel: str | None. Label for the colourbar.
         cBarCentre: None | scalar. If not none, ensure the colour bar is 
             centred on this value.
+        cMap: str. The colour map to use.
         titleTxt: str | None. Text for title.
         titleRot: scalar. Rotation of title text.
         titleWeight: str. Specification of font weight.
@@ -643,7 +653,8 @@ class ColourPlotter(Plotter):
         self.colourData = colourData
         self.draftCBarSpec = {
             'cLabel': cLabel,
-            'cBarCentre': cBarCentre
+            'cBarCentre': cBarCentre,
+            'cMap': cMap
         }
         self.cBar = None
 
@@ -702,7 +713,7 @@ class ColourPlotter(Plotter):
             scale.
         """
         cBarSpec = dict()
-        cBarSpec['cMap'] = 'RdBu_r'
+        cBarSpec['cMap'] = self.draftCBarSpec['cMap']
         cBarSpec['cNorm'] = pltColours.Normalize
         cBarSpec['cMin'] = cMin
         cBarSpec['cMax'] = cMax
@@ -800,6 +811,8 @@ class HeatmapPlotter(ColourPlotter):
     """ Stores and plots the data for one heatmap in a single subplot.
 
     ATTRIBUTES
+    mayShareAx: bool. If true plotting using axes that are shared with other
+        subplots is ok.
     cBarSpec: None | dict. Stores a final and complete specification of all the 
         details required to produce the colour bar associated with the plot. 
     axisLabels: None | dict. Stores the labels for the x- and y-axes.
@@ -813,13 +826,17 @@ class HeatmapPlotter(ColourPlotter):
             cLabel: str | None. Label for the colour bar.
             cBarCenter: None | scalar. If not none, colour bar is to be 
                 centred on this value.
+            cMap: str. The colour map to use.    
     cBar: None or handle of the colourbar associated with the plot, if a 
         colourbar has been plotted.
+    axisData: bool. Same as input to the constructor.
+    xOrder, yOrder: Same as input to the constructor.
     """
 
     def __init__(self, colourData, xLabel=None, yLabel=None, 
-                    cLabel=None, cBarCentre=None,
-                    titleTxt=None, titleRot=0, titleWeight='normal'):
+                    cLabel=None, cBarCentre=None, cMap='RdBu_r',
+                    titleTxt=None, titleRot=0, titleWeight='normal',
+                    axisData='interval', xOrder=None, yOrder=None):
         """
         INPUT
         colourData: dataframe. Contains the data to convert to colours and
@@ -827,19 +844,40 @@ class HeatmapPlotter(ColourPlotter):
             arbitrary. Has the following columns:
                 C: The values to convert to colours and plot. All provided data 
                     will be used to set the range of the colourbar.
-                X: The x-position associated with each colour value
-                Y: The y-position associated with each colour value
+                X: The x-position associated with each colour value if 
+                    axisData='interval', or a label associated with each 
+                    colour value if axisData='nominal'
+                Y: Same as 'X' but for the y-axis
         xLabel: str | None. Axis label.
         yLabel: str | None. Axis label.
         cLabel: str | None. Label for the colourbar.
         cBarCentre: None | scalar. If not none, ensure the colour bar is 
             centred on this value.
+        cMap: str. The colour map to use.
         titleTxt: str | None. Text for title.
         titleRot: scalar. Rotation of title text.
         titleWeight: str. Specification of font weight.
+        axisData:  What type of data forms the 'X' and 'Y' values in 
+            colourData? Options are...
+            'interval': 'X' and 'Y' values will be sorted prior to plotting and 
+                not all tick labels will be displayed. Data must be numeric.
+            'nominal': All tick labels will be displayed. Using shared axes 
+                with this kind of plot is not yet implemented. 
+        xOrder, yOrder: None | list. Must be None unless axisData='nominal'
+            in which case these inputs can be used to specify the order with
+            which to plot items along the x- and y-axes.
         """
-        super().__init__(colourData, xLabel, yLabel, cLabel, cBarCentre,
+        super().__init__(colourData, xLabel, yLabel, 
+                         cLabel, cBarCentre, cMap,
                          titleTxt, titleRot, titleWeight)
+        
+        self.axisData = axisData
+        if axisData == 'interval':
+            self.mayShareAx = True
+
+        self.xOrder = xOrder
+        self.yOrder = yOrder
+
 
     def plot(self, ax):
         """ Make the subplot.
@@ -849,8 +887,10 @@ class HeatmapPlotter(ColourPlotter):
         """
         data = deepcopy(self.colourData)
         data = data.pivot(columns='X', index='Y', values='C')
-        for axis in [0, 1]:
-            data = data.sort_index(axis=axis)
+
+        data = self.sortAxis(data, 'index', self.yOrder)
+        data = self.sortAxis(data, 'columns', self.xOrder)
+
         assert not np.any(np.isnan(data.to_numpy()))
         helpers.checkDfLevels(data, indexLvs=['Y'], colLvs=['X'])
 
@@ -860,13 +900,41 @@ class HeatmapPlotter(ColourPlotter):
         cBarSpec['cMap'] = self.cBarSpec['cMap']
         _, cBarSpec['cNorm'] = self.makeColourMapper()
 
-        plotHeatmapFromDf(data, unevenAllowed=True,
+        plotHeatmapFromDf(data, axisData=self.axisData, 
+                            unevenAllowed=True,
                             ax=ax, cbarMode='predef', cbarSpec=cBarSpec,
                             xLabel=self.axisLabels['xLabel'],
                             yLabel=self.axisLabels['yLabel'])
         self.addColourBarOverPlot(ax)
         self.addTitle(ax)
         self.ax = ax
+
+
+    def sortAxis(self, data, axis, order):
+        """ Sort an axis, using a prespecified order if requested and 
+        permitted. If no order is prespecified a normal sort is conducted.
+
+        INPUT
+        data: dataframe
+        axis: 'index' | 'columns'
+        order: None | list
+
+        OUTPUT
+        data: dataframe. With new ordering.
+        """
+        if order is not None:
+            if self.axisData != 'nominal':
+                raise ValueError('A specified axis order is only permitted '
+                                 'with nominal axisData.')
+            
+            assert len(getattr(data, axis)) == len(order)
+            assert set(getattr(data, axis)) == set(order)
+            data = data.reindex(labels=order, axis=axis)
+
+        else:
+            data = data.sort_index(axis=axis)
+
+        return data
         
 
 class BrainPlotter(ColourPlotter):
@@ -874,6 +942,8 @@ class BrainPlotter(ColourPlotter):
     subplot.
 
     ATTRIBUTES
+    mayShareAx: bool. If true plotting using axes that are shared with other
+        subplots is ok.
     cBarSpec: None | dict. Stores a final and complete specification of all the 
         details required to produce the colour bar associated with the plot. 
     axisLabels: None | dict. Stores the labels for the x- and y-axes.
@@ -887,6 +957,7 @@ class BrainPlotter(ColourPlotter):
             cLabel: str | None. Label for the colour bar.
             cBarCenter: None | scalar. If not none, colour bar is to be 
                 centred on this value.
+            cMap: str. The colour map to use.
     cBar: None or handle of the colourbar associated with the plot, if a 
         colourbar has been plotted.
     fsDir: str. Same as input to constructor.
@@ -897,7 +968,7 @@ class BrainPlotter(ColourPlotter):
     """
     
     def __init__(self, colourData, fsDir, parc, xLabel=None, yLabel=None, 
-                 cLabel=None, cBarCentre=None, 
+                 cLabel=None, cBarCentre=None, cMap='RdBu_r',
                  titleTxt=None, titleRot=0, titleWeight='normal',
                  azimuth=0, elevation=0):
         """
@@ -920,6 +991,7 @@ class BrainPlotter(ColourPlotter):
         cLabel: str | None. Label for the colourbar.
         cBarCentre: None | scalar. If not none, ensure the colour bar is 
             centred on this value.
+        cMap: str. The colour map to use.
         titleTxt: str | None. Text for title.
         titleRot: scalar. Rotation of title text.
         titleWeight: str. Specification of font weight.
@@ -927,7 +999,7 @@ class BrainPlotter(ColourPlotter):
         elevation: scalar. Angle for displaying the brain.
         """
         super().__init__(colourData, xLabel, yLabel, 
-                         cLabel, cBarCentre,
+                         cLabel, cBarCentre, cMap,
                          titleTxt, titleRot, titleWeight)
         self.fsDir = fsDir
         self.azimuth = azimuth
@@ -1391,6 +1463,11 @@ class MultiPlotter():
                 shareSpec[thisKey] = None
             else:
                 shareSpec[thisKey] = shareEntry['axis']
+
+                if not thisPlot['plotter'].mayShareAx:
+                    raise TypeError('Axes sharing was requested but the '
+                                    'current plotter does not support axis '
+                                    'sharing.')
 
         ax = self._addAxis(thisPlot['row'], thisPlot['col'],
                             thisPlot['endRow'], thisPlot['endCol'],
@@ -2093,7 +2170,7 @@ def findCenteredScale(lower, upper, centre):
     return newMin, newMax
 
 
-def plotHeatmapFromDf(df, unevenAllowed=False,
+def plotHeatmapFromDf(df, axisData='interval', unevenAllowed=False,
                         xLabel=None, yLabel=None, cLabel=None,
                         xtickVals=None, ytickVals=None,
                         ax=None, cbarMode='auto', 
@@ -2106,12 +2183,21 @@ def plotHeatmapFromDf(df, unevenAllowed=False,
         both of which should contain numeric values. The index values will 
         form the y-values in the heatmap, and the column values will form the 
         x-values in the heatmap 
-    unevenAllowed: boolean. Allow the values for the x or y axis to be 
-        unevenly spaced? The plot will take the spacing into account.
+    axisData: str. What type of data forms the x- and y-values? Options are...
+        'interval': x- and y-values will be sorted prior to plotting and not
+            all tick labels will be displayed. Data must be numeric.
+        'nominal': x- and y-values will not be sorted and all tick labels will
+            be displayed. Using shared axes with this kind of plot is not yet
+            implemented. I.e. if also providing the input ax, do not share 
+            the x- and y-axes with other subplots.
+    unevenAllowed: boolean. Only has an effect if axisData='interval'. Whether
+        to allow the values for the x or y axis to be unevenly spaced? The 
+        plot will take the spacing into account.
     xLabel and yLabel: str | None
     cLabel: string | None. Sets label for colour bar
     xtickVals and ytickVals: numpy arrays specifying the locations of the 
-        ticks (on the same scale as the data)
+        ticks (on the same scale as the data). Only has an effect if 
+        axisData='interval'.
     ax: axis to plot on to. If none provided, creates new figure.
     cbarMode: 'auto' | 'predef'. Whether to automatically determine the 
         colourbar range to include all data, or to use a predefined scale
@@ -2149,21 +2235,39 @@ def plotHeatmapFromDf(df, unevenAllowed=False,
     else:
         raise ValueError('Unexpected input')
 
-    df = df.sort_index(axis=0)
-    df = df.sort_index(axis=1)
+    if axisData == 'interval':
+        df = df.sort_index(axis=0)
+        df = df.sort_index(axis=1)
+    
+    elif axisData != 'nominal':
+        raise ValueError('Unrecognised option for "axisData"')
 
     yVals = df.index.to_numpy()
     xVals = df.columns.to_numpy()
     cVals = df.to_numpy()
 
-    yDiffs = np.diff(yVals)
-    xDiffs = np.diff(xVals)
-    yEven = np.allclose(yDiffs, yDiffs[0], rtol=0, atol=10e-8)
-    xEven = np.allclose(xDiffs, xDiffs[0], rtol=0, atol=10e-8)
-    allEven = yEven and xEven
-    if (not allEven) and (not unevenAllowed):
-        raise AssertionError('Either the columns or the rows are '+
-                         ' unequally spaced.')
+    if axisData == 'interval':
+        yDiffs = np.diff(yVals)
+        xDiffs = np.diff(xVals)
+        yEven = np.allclose(yDiffs, yDiffs[0], rtol=0, atol=10e-8)
+        xEven = np.allclose(xDiffs, xDiffs[0], rtol=0, atol=10e-8)
+        allEven = yEven and xEven
+        if (not allEven) and (not unevenAllowed):
+            raise AssertionError('Either the columns or the rows are '+
+                            ' unequally spaced.')
+    
+    elif axisData == 'nominal':
+        hasShared = len(ax.get_shared_x_axes().get_siblings(ax)) > 1
+        if hasShared:
+            raise NotImplementedError('For axis data of interval type, shared '
+                                      'axes cannot currently be used.')
+        
+        yTickLables = yVals
+        xTickLabels = xVals
+        yVals = np.arange(len(yVals))
+        xVals = np.arange(len(xVals))
+    else:
+        raise AssertionError('Bug')
 
     # Work out colour bar range
     if cbarMode == 'predef':
@@ -2188,10 +2292,18 @@ def plotHeatmapFromDf(df, unevenAllowed=False,
                             cmap=cbarSpec['cMap'], 
                             norm=cbarNorm)
     
-    if xtickVals is not None:    
-        ax.set_xticks(xtickVals) 
-    if ytickVals is not None:
-        ax.set_yticks(ytickVals)
+    if axisData == 'interval':
+        if xtickVals is not None:    
+            ax.set_xticks(xtickVals) 
+        if ytickVals is not None:
+            ax.set_yticks(ytickVals)
+
+    elif axisData == 'nominal':
+        ax.set_yticks(yVals, labels=yTickLables)
+        ax.set_xticks(xVals, labels=xTickLabels, rotation=90)
+
+    else:
+        raise AssertionError('Bug')
 
     if cbarSpec['addCBar']:
         colourBar = plt.colorbar(axIm, ax=ax)
