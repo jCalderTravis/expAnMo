@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+import time
 
 def writeToTopOfLog(logFile, strToAdd):
     """ Write a string to the first line of a log file (creating the file
@@ -24,6 +25,15 @@ def writeToTopOfLog(logFile, strToAdd):
         log.write(strToAdd)
         log.write(prevEntries)
         fcntl.flock(log, fcntl.LOCK_UN)
+
+
+def dispProgress(msg, repType="[Progress]"):
+    """ Display the time along with the message msg
+
+    repType: string. Will prefex the report text
+    """
+    timeStr = time.strftime("%H:%M:%S", time.localtime())
+    print(repType + ' ' + msg + '  Time: ' + timeStr)
 
 
 def avOutDfLevel(df, avOut):
@@ -201,3 +211,16 @@ def removeDimIfNeeded(thisArray):
         raise AssertionError('Unexpected data shape')
     
     return thisArray
+
+
+def dictCheckAndMerge(dictA, dictB):
+    """ Check keys in dictA and dictB are unique and then merge
+    """
+    allKeys = [list(thisDict.keys()) for thisDict in [dictA, dictB]]
+    if len(set(allKeys[0] + allKeys[1])) != \
+        (len(allKeys[0]) + len(allKeys[1])):
+        raise ValueError('Was requested to merge dictionaries ' +
+                        'but keys are not unqiue.')
+
+    dictC = {**dictA, **dictB}
+    return dictC
