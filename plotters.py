@@ -679,14 +679,15 @@ class ColourPlotter(Plotter):
         cCenter: None | scalar. If not None, then gives the value that has
             been requested to be at the centre of the colour scale.
         """
-        vals = self.colourData['C']
+        vals = self.colourData['C'].to_numpy(copy=True)
+        vals = np.unique(vals)
 
         if len(vals) > 1:
             cMin = np.min(vals)
             cMax = np.max(vals)
         
         elif len(vals) == 1:
-            vals = vals.iloc[0]
+            vals = vals[0]
             assert np.ndim(vals) == 0
             cMax = np.abs(vals)
             cMin = -cMax
