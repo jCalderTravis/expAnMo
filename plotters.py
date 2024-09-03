@@ -10,6 +10,7 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 import scipy.stats as spStats
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.cm as mplCm
@@ -17,6 +18,17 @@ import matplotlib.colors as pltColours
 from matplotlib.backends.backend_pdf import PdfPages
 import mne
 from . import helpers
+
+
+def setMatplotlibDefaults():
+    """ Set some Matplotlib defaults to values that I commonly use.
+    """
+    matplotlib.rcParams['lines.linewidth'] = 0.5
+    matplotlib.rcParams['axes.linewidth'] = 0.5
+    matplotlib.rcParams['font.size'] = 10
+    # For keeping text as text when moving to vector graphics editing software:
+    matplotlib.rcParams['pdf.fonttype'] = 42 
+    matplotlib.rcParams['ps.fonttype'] = 42
 
 
 def _makeCarefulProperty(name: str, keys: list[str] = None):
@@ -463,6 +475,7 @@ class Plotter():
         ax.set_title(self.title['txt'],
                      rotation=self.title['rotation'],
                      fontweight=self.title['weight'],
+                     fontsize=matplotlib.rcParams['font.size'],
                      multialignment='left')
     
 
@@ -1112,11 +1125,13 @@ class MultiPlotter():
                     position of the label in the usual format 
                     (see comments for addPlot)
     checkAllShare: bool. Same as input to the constructor.
+    shortCBars: bool. Same as input to the constructor.
     """
 
     def __init__(self, gridType: str, gridInfo: dict, 
                  checkAllShare: bool = True,
-                 sizes: None | dict = None) -> None:
+                 sizes: None | dict = None,
+                 shortCBars: bool = True) -> None:
         """ Define the grid onto which subplots will later be placed.
 
         INPUT
@@ -1127,29 +1142,38 @@ class MultiPlotter():
                 triplets with two larger and then one smaller. This can be used
                 to generate plots with paired columns that are closer to 
                 each other.
-        gridInfo: dict. Detailed specification of the grid. Keys required
-            depend on the gridType. For gridType='rightSpace' require...
-                plotRows: The number of subplot rows
-                plotCols: The number of subplot cols (not counting the column
-                    for the legends and/or colour bars, or the columns
-                    for creating spaces between pairs when using 
-                    gridType='rightSpacePaired')
+        gridInfo: dict. Detailed specification of the grid. Keys required...
+            plotRows: The number of subplot rows
+            plotCols: The number of subplot cols (not counting the column
+                for the legends and/or colour bars, or the columns
+                for creating spaces between pairs when using 
+                gridType='rightSpacePaired')
         checkAllShare: bool. If True, check at plotting time, that all plots
             are refered to in a specified legend or colour bar share.
         sizes: None | dict. Optionally provide a dict with any subset of the 
             following keys to override default sizing of the plots.
-                subplotHeight: Height of each subplot
-                headerHeight: Height of space above the top plot
-                footerHeight: Height of space below the bottom plot
-                subplotWidth: Width of each subplot
-                extraColWidth: Width of the extra column in the 'rightSpace'
-                    and 'rightSpacePaired' gridTypes
-                leftEdge: Width of the space left of the leftmost plot
-                rightEdge: Width of the space right of the rightmost plot
-                gapWidth: Width of the smaller columns in the rightSpacePaired
-                    grid type
+                subplotHeight: Relative height of each subplot
+                headerHeight: Relative height of space above the top plot
+                footerHeight: Relative height of space below the bottom plot
+                subplotWidth: Relative width of each subplot
+                extraColWidth: Relative width of the extra column in the 
+                    'rightSpace' and 'rightSpacePaired' gridTypes
+                leftEdge: Relative width of the space left of the leftmost plot
+                rightEdge: Relative width of the space right of the rightmost 
+                    plot
+                gapWidth: Relative width of the smaller columns in the 
+                    rightSpacePaired grid type
+                totalHeight: Total height of the figure in cm. If not provided, 
+                    a guess for a sensible value is made.
+                totalWidth: Total width of the figure in cm. If not provided, a 
+                    guess for a sensible value is made.
+                wspace: Passed to GridSpec
+                hspace: Passed to GridSpec
+        shortCBars: bool. If true, colour bars managed by this class will be 
+            drawn on axes that are not as high as normal axes.
         """
         self.checkAllShare = checkAllShare
+        self.shortCBars = shortCBars
         self.plots = []
         self.shared = []
 
@@ -1159,7 +1183,9 @@ class MultiPlotter():
             permittedSizes = ['subplotHeight', 'headerHeight', 'footerHeight',
                               'subplotWidth', 'extraColWidth',
                               'leftEdge', 'rightEdge',
-                              'gapWidth']
+                              'gapWidth',
+                              'totalHeight', 'totalWidth',
+                              'wspace', 'hspace']
             assert np.all(np.isin(list(sizes.keys()), permittedSizes))
 
         if gridType in ['rightSpace', 'rightSpacePaired']:
@@ -1173,6 +1199,7 @@ class MultiPlotter():
             setIfMissing(sizes, 'leftEdge', 1)
             setIfMissing(sizes, 'extraColWidth', 0.1)
             setIfMissing(sizes, 'rightEdge', 0.9)
+            setIfMissing(sizes, 'hspace', None)
 
             if gridType == 'rightSpacePaired':
                 numPairs = np.around(gridInfo['plotCols']/2, 10)
@@ -1182,26 +1209,29 @@ class MultiPlotter():
                 numPairs = int(numPairs)
                 numGaps = numPairs
                 setIfMissing(sizes, 'gapWidth', 0.5)
-                gridKwargs = {'wspace': -0.1}
+                setIfMissing(sizes, 'wspace', -0.1)
             else:
                 assert gridType == 'rightSpace'
                 numGaps = 0
                 setIfMissing(sizes, 'gapWidth', 0)
-                gridKwargs = {}
+                setIfMissing(sizes, 'wspace', None)
 
-            figHeight = sizes['headerHeight'] + sizes['footerHeight'] + (
-                sizes['subplotHeight']*gridInfo['plotRows'])
-            figWidth = sizes['leftEdge'] + sizes['rightEdge'] + \
+            defaultFigHeight = sizes['headerHeight'] + sizes['footerHeight'] \
+                + (sizes['subplotHeight']*gridInfo['plotRows'])
+            defaultFigWidth = sizes['leftEdge'] + sizes['rightEdge'] + \
                 sizes['extraColWidth'] + \
                 (sizes['subplotWidth'] * gridInfo['plotCols']) + \
                 (sizes['gapWidth'] * numGaps)
+            setIfMissing(sizes, 'totalHeight', defaultFigHeight / 0.39)
+            setIfMissing(sizes, 'totalWidth', defaultFigWidth / 0.39)
 
-            leftFrac = sizes['leftEdge']/figWidth
-            rightFrac = 1 - (sizes['rightEdge']/figWidth)
-            topFrac = 1 - (sizes['headerHeight']/figHeight)
-            bottomFrac = sizes['footerHeight']/figHeight
+            leftFrac = sizes['leftEdge']/sizes['totalWidth']
+            rightFrac = 1 - (sizes['rightEdge']/sizes['totalWidth'])
+            topFrac = 1 - (sizes['headerHeight']/sizes['totalHeight'])
+            bottomFrac = sizes['footerHeight']/sizes['totalHeight']
 
-            self.fig = plt.figure(figsize=[figWidth, figHeight])
+            self.fig = plt.figure(figsize=[sizes['totalWidth'] * 0.39,
+                                           sizes['totalHeight'] * 0.39])
 
             if gridType == 'rightSpacePaired':
                 weights = [sizes['subplotWidth'], sizes['subplotWidth'], 
@@ -1214,6 +1244,8 @@ class MultiPlotter():
                 # Extra column for colourbar / legend
                 weights[-1] = sizes['extraColWidth']
 
+            gridKwargs = {'wspace': sizes['wspace'],
+                          'hspace': sizes['hspace']}
             self.grid = gridspec.GridSpec(gridInfo['plotRows'], 
                                             gridInfo['plotCols'] + numGaps + 1,
                                             left=leftFrac, bottom=bottomFrac, 
@@ -1506,7 +1538,8 @@ class MultiPlotter():
             This can be helpful if will use the generated axes to position a
             shared x- or y-label. Invisible ticks are helpful so that the 
             x- or y-label is pushed away from areas where visible ticks might
-            be present.
+            be present. Can remove these ticks later, if desired, using e.g.
+            ax.get_xaxis().set_ticks([]).
 
         OUTPUT
         ax: The created axis.
@@ -1786,7 +1819,7 @@ class MultiPlotter():
         for thisPlot in sharePlots:
             thisPlot.removeColourBar()
 
-        ax = self._addAxis(row, col, invis=True, centreOnly=True)
+        ax = self._addAxis(row, col, invis=True, centreOnly=self.shortCBars)
 
         sharePlots[0].addColourBar(ax)
 
