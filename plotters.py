@@ -331,10 +331,6 @@ class Formatter():
         INPUT
         depVar: str. Name of the columns containing the dependent variable 
             that we want to perform statistics on.
-        avVars: None | str | list[str]. Names of any columns containing 
-            variables that we would like to average (within the bins defined 
-            by dBin) but not perform statisitcs on. E.g. could be helpful for 
-            determining average values of independent variables.
         dBin: str | list[str]. Name or names of columns in the 
             dataset. Statistics are performed seperately for each unique 
             combination of these variables. That is, each unique combination
@@ -342,6 +338,10 @@ class Formatter():
             and a statistical comparison is performed. Results of these 
             multiple individual statistical comparsions are corrected using 
             FDR correction if requested.
+        avVars: None | str | list[str]. Names of any columns containing 
+            variables that we would like to average (within the bins defined 
+            by dBin) but not perform statisitcs on. E.g. could be helpful for 
+            determining average values of independent variables.
         checkEqual: bool. If true, check there are an equal number of cases
             in each comparison performed.
         checkSame: None | str. If str, should be the name of a column in the
@@ -371,6 +371,9 @@ class Formatter():
             allAvVars = [depVar] + avVars
         else:
             raise TypeError('Unsupported input')
+        
+        if isinstance(dBin, str):
+            dBin = [dBin]
 
         data = deepcopy(self.data)
         grouped = data.groupby(dBin)
@@ -385,7 +388,7 @@ class Formatter():
 
         stats = data.groupby(dBin).agg(pValue=pd.NamedAgg(
             column=depVar, aggfunc=tTestCol))
-        helpers.checkDfLevels(stats, indexLvs=[dBin])
+        helpers.checkDfLevels(stats, indexLvs=dBin)
         assert list(stats.columns) == ['pValue']
         assert stats.dtypes['pValue'] == 'float'
         
@@ -410,15 +413,13 @@ class Formatter():
                             suffixes=(False, False),
                             validate='one_to_one')
         assert len(stats) == len(mean) == oldLen
-        helpers.checkDfLevels(stats, indexLvs=[dBin])
+        helpers.checkDfLevels(stats, indexLvs=dBin)
 
         stats = stats.reset_index(allow_duplicates=False)
         if fdr:
             sigCol = depVar + '_fdr_sig'
         else:
             sigCol = depVar + '_sig'
-        if isinstance(dBin, str):
-            dBin = [dBin]
         expect = [thisCol+'_mean' for thisCol in allAvVars] + [sigCol] + dBin
         assert set(stats.columns) == set(expect)
         assert len(np.unique(stats.columns)) == len(stats.columns)
@@ -862,6 +863,8 @@ class HeatmapPlotter(ColourPlotter):
                     axisData='interval', or a label associated with each 
                     colour value if axisData='nominal'
                 Y: Same as 'X' but for the y-axis
+                sig: str (optional). The column giving boolean values where 
+                    true indicates that a data point was significant.
         xLabel: str | None. Axis label.
         yLabel: str | None. Axis label.
         cLabel: str | None. Label for the colourbar.
@@ -899,14 +902,13 @@ class HeatmapPlotter(ColourPlotter):
         INPUT
         ax: Axis to plot onto
         """
-        data = deepcopy(self.colourData)
-        data = data.pivot(columns='X', index='Y', values='C')
-
-        data = self.sortAxis(data, 'index', self.yOrder)
-        data = self.sortAxis(data, 'columns', self.xOrder)
-
-        assert not np.any(np.isnan(data.to_numpy()))
-        helpers.checkDfLevels(data, indexLvs=['Y'], colLvs=['X'])
+        data = self.findData2D('C')
+        if 'sig' in self.colourData.columns:
+            print('Plotting using significance information')
+            sigData = self.findData2D('sig')
+        else:
+            print('No significance information found')
+            sigData = None
 
         self.checkCBarSpec(colourData=data)
         cBarSpec = dict()
@@ -918,10 +920,37 @@ class HeatmapPlotter(ColourPlotter):
                             unevenAllowed=True,
                             ax=ax, cbarMode='predef', cbarSpec=cBarSpec,
                             xLabel=self.axisLabels['xLabel'],
-                            yLabel=self.axisLabels['yLabel'])
+                            yLabel=self.axisLabels['yLabel'],
+                            sigDf=sigData)
         self.addColourBarOverPlot(ax)
         self.addTitle(ax)
         self.ax = ax
+
+
+    def findData2D(self, value):
+        """ Find some aspect of the data in the 2D format required by 
+        'plotHeatmapFromDf' by pivoting the data in self.colourData. The 
+        entries in the 'X' column in self.colourData wil be used as the 
+        columns of the new dataframe and the entries in the 'Y' column will be 
+        used as the index of the new dataframe.
+
+        INPUT
+        value: str. Name of a column in self.colourData. This column will
+            form the values of the 2D dataframe.
+
+        OUTPUT
+        data: The reulting pandas dataframe.
+        """
+        data = deepcopy(self.colourData)
+        data = data.pivot(columns='X', index='Y', values=value)
+
+        data = self.sortAxis(data, 'index', self.yOrder)
+        data = self.sortAxis(data, 'columns', self.xOrder)
+
+        assert not np.any(np.isnan(data.to_numpy()))
+        helpers.checkDfLevels(data, indexLvs=['Y'], colLvs=['X'])
+
+        return data
 
 
     def sortAxis(self, data, axis, order):
@@ -1191,14 +1220,14 @@ class MultiPlotter():
         if gridType in ['rightSpace', 'rightSpacePaired']:
             assert set(gridInfo.keys()) == set(['plotRows', 'plotCols'])
 
-            setIfMissing(sizes, 'subplotHeight', 1)
-            setIfMissing(sizes, 'headerHeight', 1)
-            setIfMissing(sizes, 'footerHeight', 1)
+            setIfMissing(sizes, 'subplotHeight', 2.5)
+            setIfMissing(sizes, 'headerHeight', 2.5)
+            setIfMissing(sizes, 'footerHeight', 2.5)
 
-            setIfMissing(sizes, 'subplotWidth', 1)
-            setIfMissing(sizes, 'leftEdge', 1)
-            setIfMissing(sizes, 'extraColWidth', 0.1)
-            setIfMissing(sizes, 'rightEdge', 0.9)
+            setIfMissing(sizes, 'subplotWidth', 2.5)
+            setIfMissing(sizes, 'leftEdge', 2.5)
+            setIfMissing(sizes, 'extraColWidth', 0.25)
+            setIfMissing(sizes, 'rightEdge', 2.25)
             setIfMissing(sizes, 'hspace', None)
 
             if gridType == 'rightSpacePaired':
@@ -1208,8 +1237,8 @@ class MultiPlotter():
                                      'an even number of columns.')
                 numPairs = int(numPairs)
                 numGaps = numPairs
-                setIfMissing(sizes, 'gapWidth', 0.5)
-                setIfMissing(sizes, 'wspace', -0.1)
+                setIfMissing(sizes, 'gapWidth', 1.25)
+                setIfMissing(sizes, 'wspace', -0.25)
             else:
                 assert gridType == 'rightSpace'
                 numGaps = 0
@@ -1222,8 +1251,8 @@ class MultiPlotter():
                 sizes['extraColWidth'] + \
                 (sizes['subplotWidth'] * gridInfo['plotCols']) + \
                 (sizes['gapWidth'] * numGaps)
-            setIfMissing(sizes, 'totalHeight', defaultFigHeight / 0.39)
-            setIfMissing(sizes, 'totalWidth', defaultFigWidth / 0.39)
+            setIfMissing(sizes, 'totalHeight', defaultFigHeight)
+            setIfMissing(sizes, 'totalWidth', defaultFigWidth)
 
             leftFrac = sizes['leftEdge']/sizes['totalWidth']
             rightFrac = 1 - (sizes['rightEdge']/sizes['totalWidth'])
@@ -2208,22 +2237,23 @@ def plotHeatmapFromDf(df, axisData='interval', unevenAllowed=False,
                         xLabel=None, yLabel=None, cLabel=None,
                         xtickVals=None, ytickVals=None,
                         ax=None, cbarMode='auto', 
-                        cbarSpec=None):
+                        cbarSpec=None, sigDf=None):
     """ Plot a heatmap from a dataframe where the indicies and columns
     are numeric values.
 
     INPUT
-    df: Pandas dataframe. Should have one column-level and one index-level, 
-        both of which should contain numeric values. The index values will 
-        form the y-values in the heatmap, and the column values will form the 
-        x-values in the heatmap 
+    df: Pandas dataframe. Should have one column-level and one index-level. 
+        The index values will form the y-values in the heatmap, and the column 
+        values will form the x-values in the heatmap 
     axisData: str. What type of data forms the x- and y-values? Options are...
         'interval': x- and y-values will be sorted prior to plotting and not
-            all tick labels will be displayed. Data must be numeric.
+            all tick labels will be displayed. Axis data (i.e. the index and 
+            column values of 'df') must be numeric.
         'nominal': x- and y-values will not be sorted and all tick labels will
-            be displayed. Using shared axes with this kind of plot is not yet
-            implemented. I.e. if also providing the input ax, do not share 
-            the x- and y-axes with other subplots.
+            be displayed. Axis data does not have to be numeric. Using shared 
+            axes with this kind of plot is not yet implemented. I.e. if also 
+            providing the input ax, do not share the x- and y-axes with other 
+            subplots.
     unevenAllowed: boolean. Only has an effect if axisData='interval'. Whether
         to allow the values for the x or y axis to be unevenly spaced? The 
         plot will take the spacing into account.
@@ -2245,6 +2275,9 @@ def plotHeatmapFromDf(df, axisData='interval', unevenAllowed=False,
         If cbarMode is 'predef' then additonally require...
             cNorm: matplotlib normaliser instance. E.g. an initalised instance
                 of pltColours.Normalize.
+    sigDf: None | pandas dataframe. If provided should be a dataframe with
+        exactly the same index and columns as 'df'. Values shoud be boolean,
+        where true indicates a statistically significant datapoint. 
 
     OUTPUT
     Returns the figure produced/modified
@@ -2272,6 +2305,10 @@ def plotHeatmapFromDf(df, axisData='interval', unevenAllowed=False,
     if axisData == 'interval':
         df = df.sort_index(axis=0)
         df = df.sort_index(axis=1)
+
+        if sigDf is not None:
+            sigDf = sigDf.sort_index(axis=0)
+            sigDf = sigDf.sort_index(axis=1)
     
     elif axisData != 'nominal':
         raise ValueError('Unrecognised option for "axisData"')
@@ -2279,6 +2316,16 @@ def plotHeatmapFromDf(df, axisData='interval', unevenAllowed=False,
     yVals = df.index.to_numpy()
     xVals = df.columns.to_numpy()
     cVals = df.to_numpy()
+    assert not np.any(np.isnan(cVals))
+
+    if sigDf is not None:
+        assert df.index.equals(sigDf.index)
+        assert df.columns.equals(sigDf.columns)
+        sigVals = sigDf.to_numpy()
+        assert not np.any(np.isnan(sigVals))
+        assert sigVals.dtype == 'bool'
+
+        cVals = np.ma.array(cVals, mask=np.logical_not(sigVals))
 
     if axisData == 'interval':
         yDiffs = np.diff(yVals)
