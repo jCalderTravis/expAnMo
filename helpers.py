@@ -55,7 +55,8 @@ def avOutDfLevel(df, avOut):
 
 
 def trimDfIndex(df: pd.DataFrame, idxLevel: str, win: tuple,
-                assertTrim: bool = True) -> pd.DataFrame:
+                assertTrim: bool = True,
+                centreTol = np.inf) -> pd.DataFrame:
     """ Trim the rows of a dataframe based on the value of one level of the
     index.
 
@@ -68,6 +69,9 @@ def trimDfIndex(df: pd.DataFrame, idxLevel: str, win: tuple,
         value.
     assertTrim: bool. If True check that we will be trimming at least some 
         data from both ends, otherwise raise an error.
+    centerTol: scalar. Gives a tolerance. If set to a number smaller than 
+        infinity the code checks that the average value of the relevant index 
+        level is within this tolerance of the center of the trimming window. 
 
     OUTPUT
     df: pandas dataframe. A copy of the input modified accordingly.
@@ -86,6 +90,10 @@ def trimDfIndex(df: pd.DataFrame, idxLevel: str, win: tuple,
         vals <= win[1]
     )
     df = df.loc[included, :]
+
+    winCentre = np.mean(win)
+    dataCentre = np.mean(df.index.get_level_values(idxLevel).values)
+    assert np.abs(dataCentre - winCentre) < centreTol
 
     return df
 

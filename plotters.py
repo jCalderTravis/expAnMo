@@ -107,8 +107,9 @@ class Formatter():
             Provide (possibly empty) lists for both keep and drop or neither of 
             them.
         drop: None | list[str]. List of column names. If provided, these 
-            columns will be dropped. Provide (possibly empty) lists for both 
-            keep and drop or neither of them.
+            columns will be dropped. May not contain column names that were
+            also passed as 'within' or 'keep'. Provide (possibly empty) lists 
+            for both keep and drop or neither of them.
         checkEqual: bool. If true, check that there are the same number
             of cases in each group.
         """
@@ -1140,27 +1141,34 @@ class MultiPlotter():
                 from the group of plots is plotted, its axis is stored here.
                 It can then be refered to, to set up the requested axis 
                 sharing.
-            pos: None | str | dict. Not None only in the following cases...
-                'property' is 'legend' or 'colourBar', then pos is a dict with 
-                    keys 'row' and 'col' specifying the position of the legend 
-                    or colour bar in the usual format (see comments for 
-                    addPlot)
+            pos: str | dict. Not None only in the following cases...
+                'property' is 'legend' then pos a dict with keys 'row' and 
+                    'col' specifying the position of the legend or colour 
+                    bar in the usual format (see comments for addPlot). 
+                'property' is 'colourBar', then pos is the same dict as for 
+                    the case when Prop is 'legend' except that many 
+                    additionally contain a key 'shortCBars'. The associated 
+                    value is a boolean that determines whether to draw colour 
+                    bars somewhat shorter than a full axis length (defaults 
+                    to True).
                 'property' is 'title', 'xLabel', 'yLabel', 'xAxis', 'yAxis' and
-                    want to override the default position of the shared label /
-                    tick labels. Then pos is either (a) the string 'first' or
-                    'last', determining whether to put the labels on the first
+                    Then pos is either (a) the string 'first' or 'last', 
+                    determining whether to put the labels on the first
                     or last plot (as ordered in self.plots), or (b) a dict with 
                     keys 'row', 'col', 'endRow', 'endCol' to specify the 
                     position of the label in the usual format 
-                    (see comments for addPlot)
+                    (see comments for addPlot). If property is 'xLabel' or
+                    'yLabel' then under case (b) the dict may optionally also
+                    contain a 'pad' key, whos value sets the padding between 
+                    the axes and the label in units of points.
     checkAllShare: bool. Same as input to the constructor.
-    shortCBars: bool. Same as input to the constructor.
+    isPaper: bool. Same as input to the constructor.
     """
 
     def __init__(self, gridType: str, gridInfo: dict, 
                  checkAllShare: bool = True,
                  sizes: None | dict = None,
-                 shortCBars: bool = True) -> None:
+                 isPaper = True) -> None:
         """ Define the grid onto which subplots will later be placed.
 
         INPUT
@@ -1198,11 +1206,13 @@ class MultiPlotter():
                     guess for a sensible value is made.
                 wspace: Passed to GridSpec
                 hspace: Passed to GridSpec
-        shortCBars: bool. If true, colour bars managed by this class will be 
-            drawn on axes that are not as high as normal axes.
+        isPaper: bool. If false invisble ticks labels may be drawn on 
+            axes to ensure that labels are automatically correctly placed. If 
+            true, this behaviour is not permitted. Adjustment of label 
+            positions may be necessary.
         """
         self.checkAllShare = checkAllShare
-        self.shortCBars = shortCBars
+        self.isPaper = isPaper
         self.plots = []
         self.shared = []
 
@@ -1355,20 +1365,30 @@ class MultiPlotter():
             should apply to. All plots with any of the tags in the list are
             included.
         pos: None | str | dict. Only provide in the following cases...
-            Prop is 'legend' or 'colourBar', then pos a dict with keys 
-                'row' and 'col' specifying the position of the legend or colour 
-                bar in the usual format (see comments for addPlot)
-            Prop is 'title', 'xLabel' or 'yLabel' and want to override the 
+            Prop is 'legend' then pos a dict with keys 'row' and 'col' 
+                specifying the position of the legend or colour 
+                bar in the usual format (see comments for addPlot). 
+            Prop is 'colourBar', then pos is the same dict as for the case 
+                when Prop is 'legend' except that many additionally contain a
+                key 'shortCBars'. The associated value is a boolean that 
+                determines whether to draw colour bars somewhat shorter than
+                a full axis length (defaults to True).
+            Prop is 'title' and want to override the default position of the 
+                shared label. In this case provide a dict with keys 'row', 
+                'col', 'endRow', 'endCol' to specify the position of the label 
+                in the usual format (see comments for addPlot)
+            Prop is 'xLabel' or 'yLabel' and want to override the 
                 default position of the shared label. In this case provide a 
                 dict with keys 'row', 'col', 'endRow', 'endCol' to specify the 
                 position of the label in the usual format (see comments for 
-                addPlot)
-            Prop is 'xLabel' or 'xAxis', want to override the default 
-                position of the label / tick labels, and simply want to move
-                the label / tick labels to the first plot (instead of being on 
-                the final plot as default). Then pos should be the string 
-                'first' or 'last' to specify on which plot to have the 
-                label / tick labels
+                addPlot). Optionally, can include the key 'pad' who's value
+                sets the padding between the axes and the label in units of 
+                points.
+            Prop is 'xLabel', 'xAxis', 'yLabel' or 'yAxis' and want to override
+                the default position of the label / tick labels (but don't
+                need full control over the positioning of the axis labels). Then 
+                pos should be the string 'first' or 'last' to specify on which 
+                plot to have the label / tick labels
         """
         if isinstance(prop, str):
             prop = [prop]
@@ -1596,6 +1616,7 @@ class MultiPlotter():
             ax.patch.set_visible(False)
 
             if tickSpace:
+                assert not self.isPaper
                 ax.tick_params(labelcolor='none', which='both', 
                                 top=False, bottom=False, 
                                 left=False, right=False)
@@ -1753,13 +1774,21 @@ class MultiPlotter():
                 raise AssertionError('Bug')
 
         if not isinstance(pos, str):
+            if 'pad' in pos:
+                assert label in ['xLabel', 'yLabel']
+                labelpad = pos['pad']
+                del pos['pad']
+            else:
+                labelpad = None
+
             assert set(pos.keys()) == set(['row', 'col', 'endRow', 'endCol'])
-            ax = self._addAxis(**pos, invis=True, tickSpace=True)
+            ax = self._addAxis(**pos, invis=True, 
+                               tickSpace=(not self.isPaper))
 
             if label == 'xLabel':
-                ax.set_xlabel(labelTxt)
+                ax.set_xlabel(labelTxt, labelpad=labelpad)
             elif label == 'yLabel':
-                ax.set_ylabel(labelTxt)
+                ax.set_ylabel(labelTxt, labelpad=labelpad)
             elif label == 'title':
                 sharePlots[0].addTitle(ax)
             else:
@@ -1830,7 +1859,7 @@ class MultiPlotter():
         sharePlots[0].addLegend(ax)
 
     
-    def _shareColourbar(self, tags, row, col):
+    def _shareColourbar(self, tags, row, col, shortCBars=True):
         """ Setup a shared colourbar for a group of plots, and remove the 
         individual colourbars.
 
@@ -1848,7 +1877,7 @@ class MultiPlotter():
         for thisPlot in sharePlots:
             thisPlot.removeColourBar()
 
-        ax = self._addAxis(row, col, invis=True, centreOnly=self.shortCBars)
+        ax = self._addAxis(row, col, invis=True, centreOnly=shortCBars)
 
         sharePlots[0].addColourBar(ax)
 

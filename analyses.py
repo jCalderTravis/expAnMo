@@ -640,12 +640,28 @@ class Analysis(object):
             elif ext == 'png':
                 extNameSeg = '.png'
             else:
-                raise Exception('Unrecognised option')
+                raise ValueError('Unrecognised option')
             
             saveName += extNameSeg
 
         saveName = os.path.join(thisDir, saveName)
         return saveName
+    
+
+    def convertBoolSetting(self, setting: str) -> bool:
+        """ Look in the dict self.settings for the specified setting. Check
+        that it is a boolean in the format of a string (either 'true' or 
+        'false') and convert to a boolean.
+        """
+        if self.settings[setting] == 'true':
+            converted = True
+        
+        elif self.settings[setting] == 'false':
+            converted = False
+        else:
+            raise ValueError('Expected this setting to be a boolean '
+                             'written as a string.')
+        return converted
     
 
 class Test(Analysis):
