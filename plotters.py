@@ -481,6 +481,57 @@ class Plotter():
                      multialignment='left')
     
 
+class CustomPlotter(Plotter):
+    """ Stores and plots data for any kind of plot, in a way that can be used
+    with the core features of MultiPlotter.
+
+    ATTRIBUTES
+    mayShareAx: bool. If true plotting using axes that are shared with other
+        subplots is ok.
+    axisLabels: None | dict. Stores the labels for the x- and y-axes.
+    title: None | dict. Stores a complete specification of the plot title.
+    ax: None | axis. Once plotting is performed, the axis used is stored here.
+    data: Same as input to the constructor.
+    plotFun: Same as input to the constructor.
+    """
+    def __init__(self, data, plotFun,
+                 xLabel=None, yLabel=None,
+                 titleTxt=None, titleRot=0, titleWeight='normal') -> None:
+        """
+        INPUT
+        data: any format. The data from which the data for plotting will be
+            derived, or that data itself.
+        plotFun: function. It should accept two arguments passed by position,
+            data and ax. Data will be this class' self.data attribute, and ax
+            will be a matplotlib axis to plot on to. Should perform the 
+            plotting (apart from adding a title and x and y axis labels). 
+            Any output will be ignored.
+        xLabel: str | None. Axis label.
+        yLabel: str | None. Axis label.
+        titleTxt: str | None. Text for title.
+        titleRot: scalar. Rotation of title text.
+        titleWeight: str. Specification of font weight.
+        """
+        super().__init__(xLabel, yLabel, titleTxt, titleRot, titleWeight)
+        self.data = data
+        self.plotFun = plotFun
+
+
+    def plot(self, ax):
+        """ Make the subplot.
+
+        INPUT
+        ax: Axis to plot onto
+        """
+        self.plotFun(self.data, ax)
+        if self.axisLabels['xLabel'] is not None:
+            ax.set_xlabel(self.axisLabels['xLabel'])
+        if self.axisLabels['yLabel'] is not None:
+            ax.set_ylabel(self.axisLabels['yLabel'])
+        self.addTitle(ax)
+        self.ax = ax
+
+
 class SeriesPlotter(Plotter):
     """ Stores and plots the data for one or multiple series on a single
     subplot.
@@ -1248,7 +1299,7 @@ class MultiPlotter():
                 numPairs = int(numPairs)
                 numGaps = numPairs
                 setIfMissing(sizes, 'gapWidth', 1.25)
-                setIfMissing(sizes, 'wspace', -0.25)
+                setIfMissing(sizes, 'wspace', -0.5)
             else:
                 assert gridType == 'rightSpace'
                 numGaps = 0
