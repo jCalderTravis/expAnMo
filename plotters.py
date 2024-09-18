@@ -29,6 +29,8 @@ def setMatplotlibDefaults():
     # For keeping text as text when moving to vector graphics editing software:
     matplotlib.rcParams['pdf.fonttype'] = 42 
     matplotlib.rcParams['ps.fonttype'] = 42
+    matplotlib.rcParams['font.family'] = 'sans-serif'
+    matplotlib.rcParams['font.sans-serif'] = 'Arial'
 
 
 def _makeCarefulProperty(name: str, keys: list[str] = None):
@@ -1192,7 +1194,7 @@ class MultiPlotter():
                 from the group of plots is plotted, its axis is stored here.
                 It can then be refered to, to set up the requested axis 
                 sharing.
-            pos: str | dict. Not None only in the following cases...
+            pos: None | str | dict. Not None only in the following cases...
                 'property' is 'legend' then pos a dict with keys 'row' and 
                     'col' specifying the position of the legend or colour 
                     bar in the usual format (see comments for addPlot). 
@@ -1208,10 +1210,17 @@ class MultiPlotter():
                     or last plot (as ordered in self.plots), or (b) a dict with 
                     keys 'row', 'col', 'endRow', 'endCol' to specify the 
                     position of the label in the usual format 
-                    (see comments for addPlot). If property is 'xLabel' or
-                    'yLabel' then under case (b) the dict may optionally also
-                    contain a 'pad' key, whos value sets the padding between 
-                    the axes and the label in units of points.
+                    (see comments for addPlot). 
+            kwargs: None | dict. Dict of keyword arguments. Only not None in 
+                the following cases...
+                Prop is 'xLabel' or 'yLabel' and want to pass keyword arguments
+                    to matplotlibs's set_xlabel or set_ylabel. For example, if
+                    want to increase the padding between the axes and the label 
+                    in units of points using the keyword 'labelpad'. Note that 
+                    if the x/y label is not redrawn then this kwargs will have 
+                    no effect. To ensure redrawing specify the position of the 
+                    label using 'row', 'col', 'endRow', and 'endCol' as 
+                    described above.
     checkAllShare: bool. Same as input to the constructor.
     isPaper: bool. Same as input to the constructor.
     """
@@ -1390,7 +1399,9 @@ class MultiPlotter():
         self.plots.append(plotSpec) 
 
 
-    def addShare(self, prop: str | list, tags: list, pos: dict = None):
+    def addShare(self, prop: str | list, tags: list, 
+                 pos: None | str | dict = None,
+                 kwargs: None | dict = None):
         """ Store the information on one property that should be shared 
         amongst some of the subplots. Call prior to calling the perform method, 
         which performs the requested plotting.
@@ -1432,20 +1443,27 @@ class MultiPlotter():
                 default position of the shared label. In this case provide a 
                 dict with keys 'row', 'col', 'endRow', 'endCol' to specify the 
                 position of the label in the usual format (see comments for 
-                addPlot). Optionally, can include the key 'pad' who's value
-                sets the padding between the axes and the label in units of 
-                points.
+                addPlot).
             Prop is 'xLabel', 'xAxis', 'yLabel' or 'yAxis' and want to override
                 the default position of the label / tick labels (but don't
                 need full control over the positioning of the axis labels). Then 
                 pos should be the string 'first' or 'last' to specify on which 
                 plot to have the label / tick labels
+        kwargs: None | dict. Dict of keyword arguments. Only provide in the 
+            following cases...
+            Prop is 'xLabel' or 'yLabel' and want to pass keyword arguments
+                to matplotlibs's set_xlabel or set_ylabel. For example, if
+                want to increase the padding between the axes and the label in 
+                units of points using the keyword 'labelpad'. Note that if the
+                x/y label is not redrawn then this kwargs will have no effect.
+                To ensure redrawing then specify the position of the label
+                using 'row', 'col', 'endRow', and 'endCol' as described above.
         """
         if isinstance(prop, str):
             prop = [prop]
         
         for thisProp in prop:
-            self._addSingleShare(thisProp, tags, pos)
+            self._addSingleShare(thisProp, tags, pos, kwargs)
 
 
     def perform(self):
@@ -1461,7 +1479,8 @@ class MultiPlotter():
     
 
     def _addSingleShare(self, prop: str, tags: list, 
-                        pos: None | str | dict = None):
+                        pos: None | str | dict = None,
+                        kwargs: None | dict = None):
         """ Same as addShare but adds a single property at a time. I.e. the 
         prop input must be a string, and cannot be a list.
         """
@@ -1469,8 +1488,12 @@ class MultiPlotter():
         sharedSpec = {
             'property': prop,
             'tags': tags,
-            'pos': pos
+            'pos': pos,
+            'kwargs': kwargs
         }
+
+        if prop not in ['xLabel', 'yLabel']:
+            assert kwargs is None
 
         if prop in ['xAxis', 'yAxis']:
             sharedSpec['axis'] = None
@@ -1497,7 +1520,7 @@ class MultiPlotter():
         """
         for thisShare in self.shared:
             assert np.all(np.isin(list(thisShare.keys()), 
-                                  ['property', 'tags', 'axis', 'pos']))
+                                ['property', 'tags', 'axis', 'pos', 'kwargs']))
             assert thisShare['property'] in ['title', 'xLabel', 'yLabel',
                                              'xAxis', 'yAxis',
                                              'legend', 'colourBar']
@@ -1659,7 +1682,7 @@ class MultiPlotter():
         if centreOnly:
             fineGrid = gridspec.GridSpecFromSubplotSpec(10, 1, 
                                                         subplot_spec=gridSec)
-            gridSec = fineGrid[3:7, :]
+            gridSec = fineGrid[2:8, :]
 
         ax = self.fig.add_subplot(gridSec, **shareSpec)
 
@@ -1753,7 +1776,7 @@ class MultiPlotter():
         for thisShare in self.shared:
             if thisShare['property'] in ['title', 'xLabel', 'yLabel']:
                 self._shareLabels(thisShare['property'], thisShare['tags'],
-                                  thisShare['pos'])
+                                  thisShare['pos'], thisShare['kwargs'])
             
             elif thisShare['property'] in ['xAxis', 'yAxis']:
                 self._shareTicks(thisShare['property'], thisShare['tags'],
@@ -1769,7 +1792,7 @@ class MultiPlotter():
                 raise ValueError('Unrecognised property')
         
     
-    def _shareLabels(self, label, tags, pos):
+    def _shareLabels(self, label, tags, pos, kwargs):
         """ Remove duplicated title, x- or y-labels from a group of plots. An 
         error is raised if the existing labels do not match.
 
@@ -1783,6 +1806,8 @@ class MultiPlotter():
             the dict specifies the location for a new label. In this case pos 
             has the keys row, col, endRow, endCol, which have the usual 
             meanings (see comments for addPlot).
+        kwargs: None | dict. Keyword arguments to pass to set_xlabel or
+            set_ylabel if redraw the x- or y-label.
         """
         sharePlots = self._findPlotWithTags(tags)
 
@@ -1825,21 +1850,19 @@ class MultiPlotter():
                 raise AssertionError('Bug')
 
         if not isinstance(pos, str):
-            if 'pad' in pos:
-                assert label in ['xLabel', 'yLabel']
-                labelpad = pos['pad']
-                del pos['pad']
-            else:
-                labelpad = None
-
             assert set(pos.keys()) == set(['row', 'col', 'endRow', 'endCol'])
             ax = self._addAxis(**pos, invis=True, 
                                tickSpace=(not self.isPaper))
+            
+            if kwargs is not None:
+                assert label in ['xLabel', 'yLabel']
+            else:
+                kwargs = {}
 
             if label == 'xLabel':
-                ax.set_xlabel(labelTxt, labelpad=labelpad)
+                ax.set_xlabel(labelTxt, **kwargs)
             elif label == 'yLabel':
-                ax.set_ylabel(labelTxt, labelpad=labelpad)
+                ax.set_ylabel(labelTxt, **kwargs)
             elif label == 'title':
                 sharePlots[0].addTitle(ax)
             else:
