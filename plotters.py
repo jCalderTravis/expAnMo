@@ -23,8 +23,15 @@ from . import helpers
 def setMatplotlibDefaults():
     """ Set some Matplotlib defaults to values that I commonly use.
     """
-    matplotlib.rcParams['lines.linewidth'] = 0.5
-    matplotlib.rcParams['axes.linewidth'] = 0.5
+    lines = ['lines.linewidth', 
+             'lines.markeredgewidth', 
+             'axes.linewidth', 
+             'xtick.major.width', 
+             'ytick.major.width', 
+             'patch.linewidth']
+    for thisLine in lines:
+        matplotlib.rcParams[thisLine] = 0.5
+
     matplotlib.rcParams['font.size'] = 10
     # For keeping text as text when moving to vector graphics editing software:
     matplotlib.rcParams['pdf.fonttype'] = 42 
@@ -1250,14 +1257,13 @@ class MultiPlotter():
         sizes: None | dict. Optionally provide a dict with any subset of the 
             following keys to override default sizing of the plots.
                 subplotHeight: Relative height of each subplot
-                headerHeight: Relative height of space above the top plot
-                footerHeight: Relative height of space below the bottom plot
+                headerHeight: Height of space above the top plot in cm
+                footerHeight: Height of space below the bottom plot in cm
                 subplotWidth: Relative width of each subplot
                 extraColWidth: Relative width of the extra column in the 
                     'rightSpace' and 'rightSpacePaired' gridTypes
-                leftEdge: Relative width of the space left of the leftmost plot
-                rightEdge: Relative width of the space right of the rightmost 
-                    plot
+                leftEdge: Width of the space left of the leftmost plot in cm
+                rightEdge: Width of the space right of the rightmost plot in cm
                 gapWidth: Relative width of the smaller columns in the 
                     rightSpacePaired grid type
                 totalHeight: Total height of the figure in cm. If not provided, 
@@ -1819,8 +1825,8 @@ class MultiPlotter():
             else:
                 labelTxt = np.unique(labelTxt)
                 if len(labelTxt) != 1:
-                    raise ValueError(f'{label} does not match across plots even '+
-                                    'though requested to share.')
+                    raise ValueError(f'{label} does not match across plots '+
+                                     'even though requested to share.')
                 labelTxt = labelTxt[0]
 
         elif label == 'title':
