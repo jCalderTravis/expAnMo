@@ -3,15 +3,19 @@ import numpy as np
 import pandas as pd
 import time
 
-def writeToTopOfLog(logFile, strToAdd):
+def writeToTopOfLog(logFile, strToAdd, lockFile=True):
     """ Write a string to the first line of a log file (creating the file
     if it does not already exist).
 
     INPUT
     logFile: str. File path to a text file.
     strToAdd: str. The string to write
+    lockFile: bool. If True prevent more than one process writting to the 
+        log file at the same time. Should be set to True except when working
+        on windows, where this functionality is not implemented.
     """
-    import fcntl
+    if lockFile:
+        import fcntl
 
     if not os.path.isfile(logFile):
         with open(logFile, 'x'):
@@ -19,12 +23,14 @@ def writeToTopOfLog(logFile, strToAdd):
 
     with open(logFile, 'r+') as log:
         # Prevent other processes from writing to the log file at the same time
-        fcntl.flock(log, fcntl.LOCK_EX) 
+        if lockFile:
+            fcntl.flock(log, fcntl.LOCK_EX) 
         prevEntries = log.read()
         log.seek(0)
         log.write(strToAdd)
         log.write(prevEntries)
-        fcntl.flock(log, fcntl.LOCK_UN)
+        if lockFile:
+            fcntl.flock(log, fcntl.LOCK_UN)
 
 
 def dispProgress(msg, repType="[Progress]"):

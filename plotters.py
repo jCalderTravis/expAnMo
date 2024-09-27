@@ -155,9 +155,11 @@ class Formatter():
     def dBin(self, strategy: str, 
                 opts: dict, 
                 binName: str,
-                sepFor: None | str | list[str] = None):
+                sepFor: None | str | list[str] = None,
+                binAvName: None | str = None):
         """ Bin data and add a new column to the data, givng the bin to
-        which each case belongs.
+        which each case belongs (and optionally a column giving the average
+        value of the binning variable in each bin).
 
         INPUT
         strategy: str. Binning strategy. Options are...
@@ -177,6 +179,13 @@ class Formatter():
         sepFor: None | str | list[str]. Name or names of columns in the 
             dataset. Bining is performed seperately for each unique 
             combination of these variables.
+        binAvName: None | str. If provided add a second new column to the 
+            data with name specified by binAvName. This column gives the 
+            average value of varaible used for binning (i.e. opts['col']) in 
+            the bin to which the case belongs. Averages are computed seperately 
+            for each seperation sepecified by sepFor. Hence this value will be 
+            the same for all cases that fall in the same bin, and which have 
+            the same unique combination for the variables specified in sepFor.
 
         TODO Add option to bin by percentile See groupby(...)[var].rank(pct=true)
         """
@@ -184,7 +193,8 @@ class Formatter():
         startCols = deepcopy(list(self.data.columns))
 
         if sepFor is None: 
-            self.data = self._binAll(self.data, strategy, opts, binName)
+            self.data = self._binAll(self.data, strategy, opts, binName,
+                                     binAvName=binAvName)
         else:
             if isinstance(sepFor, str):
                 sepFor = [sepFor]
@@ -193,17 +203,24 @@ class Formatter():
             grouped = self.data.groupby(sepFor)
             processed = []
             for _, group in grouped:
-                thisProcessed = self._binAll(group, strategy, opts, binName)
+                thisProcessed = self._binAll(group, strategy, opts, binName,
+                                             binAvName=binAvName)
                 processed.append(thisProcessed)
 
             processed = pd.concat(processed, verify_integrity=True)
             assert len(processed) == len(startCases)
-            assert list(processed.columns) == startCols + [binName]
+            expectCols = startCols + [binName]
+            if binAvName is not None:
+                expectCols.append(binAvName)
+            assert list(processed.columns) == expectCols
             self.data = processed
 
 
-    def _binAll(self, data: pd.DataFrame, strategy: str, opts: dict, 
-                  binName: str):
+    def _binAll(self, data: pd.DataFrame, 
+                strategy: str, 
+                opts: dict, 
+                binName: str, 
+                binAvName: None | str = None):
         """ Perform binning of all input data. Similar functionality to .dBin()
         except operates on the input, not on self.data, and cannot perform 
         binning seperately for different subsets of the data.
@@ -211,17 +228,22 @@ class Formatter():
         INPUT
         data: pandas dataframe to perform the binning on. Data is deepcopied
             to ensure no mutation of the input data.
-        strategy, opts, binName: Same as input to the method .dBin()
+        strategy, opts, binName, binAvName: Same as input to the method .dBin()
 
         OUTPUT
         data: pandas dataframe. Copy of the input data with the binning 
             perormed and the results of the binning stored in a new column
-            with name binName.
+            with name binName. A further new column with name binAvName is 
+            added if this input is provided.
         """
         data = deepcopy(data)
         if binName in data.columns:
             raise ValueError('Binning data cannot be assigned to requested '+
                              'columns because it already exists.')
+        if (binAvName is not None) and (binAvName in data.columns):
+            raise ValueError('Average value of binning variable cannot be '+
+                             'assigned to the requested column because '+
+                             'the column already exists.')
 
         if strategy == 'col':
             assert set(opts.keys()) == {'col'}
@@ -235,6 +257,20 @@ class Formatter():
             assert not np.any(np.isnan(data[binName]))
         else:
             raise ValueError('Unrecognised binning option')
+        
+        if binAvName is not None:
+            avFrameCols = [binName, opts['col']]
+            avDataFormatter = Formatter(data.loc[:, avFrameCols])
+            avDataFormatter.average(within=binName, checkEqual=False)
+            avData = avDataFormatter.data
+            assert list(avData.columns) == avFrameCols
+            avData = avData.rename(columns={opts['col']: binAvName}, 
+                                   errors='raise')
+            oldLen = len(data)
+            data = pd.merge(data, avData, how='left', on=binName, 
+                            suffixes=(False, False),
+                            validate='many_to_one')
+            assert len(data) == oldLen
         
         return data
             

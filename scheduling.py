@@ -42,7 +42,8 @@ def writeToDo(logStr):
     helpers.writeToTopOfLog(logInfo['centralTodoLog'], todo)
 
 
-def writeToOverviewLog(thisDir, success, slurmID, ptpnt, sess, command):
+def writeToOverviewLog(thisDir, success, slurmID, ptpnt, sess, command,
+                       lockFile=True):
     """ Write a line to the overview log file.
 
     INPUT
@@ -51,6 +52,9 @@ def writeToOverviewLog(thisDir, success, slurmID, ptpnt, sess, command):
     ptpnt: str.
     sess: str.
     inCommand: str. The command asked to run by the user.
+    lockFile: bool. If True prevent more than one process writting to the 
+        log file at the same time. Should be set to True except when working
+        on windows, where this functionality is not implemented.
     """
     overviewLog = os.path.join(thisDir, 'z_overviewLog.txt') 
 
@@ -69,7 +73,7 @@ def writeToOverviewLog(thisDir, success, slurmID, ptpnt, sess, command):
                                                                     ptpnt,
                                                                     sess,
                                                                     command)
-    helpers.writeToTopOfLog(overviewLog, strToAdd)
+    helpers.writeToTopOfLog(overviewLog, strToAdd, lockFile)
     
 
 def submitJobs(mode, step, ptpnt, sess, script, sessMode, skipBehav):
@@ -170,7 +174,8 @@ def splitSessSpec(sess):
     return allSess
 
 
-def runJob(module, keyDirs, inCommand, ptpnt, sess, slurmID, skipBehav):
+def runJob(module, keyDirs, inCommand, ptpnt, sess, slurmID, skipBehav,
+           lockFile):
     """ Run a single python job.
 
     INPUT
@@ -192,6 +197,9 @@ def runJob(module, keyDirs, inCommand, ptpnt, sess, slurmID, skipBehav):
         slurm.
     skipIfPos: 'skipIfPos' or 'alwaysRun'. Determines the behaviour of the 
         analysis if all results files already exist.
+    lockFile: bool. If True prevent more than one process writting to the 
+        log file at the same time. Should be set to True except when working
+        on windows, where this functionality is not implemented.
     """
 
     allSess = splitSessSpec(sess)
@@ -216,10 +224,10 @@ def runJob(module, keyDirs, inCommand, ptpnt, sess, slurmID, skipBehav):
             runSess(module, keyDirs, inCommand, ptpnt, thisSess, skipIfPos, 
                     slurmID)
         writeToOverviewLog(keyDirs['codeMain'], True, slurmID,
-                            ptpnt, sess, inCommand)
+                            ptpnt, sess, inCommand, lockFile)
     except:
         writeToOverviewLog(keyDirs['codeMain'], False, slurmID,
-                           ptpnt, sess, inCommand)
+                           ptpnt, sess, inCommand, lockFile)
         raise
 
 
