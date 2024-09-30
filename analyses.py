@@ -639,6 +639,8 @@ class Analysis(object):
                 extNameSeg = '.pdf'
             elif ext == 'png':
                 extNameSeg = '.png'
+            elif ext == 'RData':
+                extNameSeg = '.RData'
             else:
                 raise ValueError('Unrecognised option')
             
