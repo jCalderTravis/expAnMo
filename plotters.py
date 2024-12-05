@@ -1522,12 +1522,18 @@ class MultiPlotter():
             self._addSingleShare(thisProp, tags, pos, kwargs)
 
 
-    def perform(self):
+    def perform(self, cBarsDone=False):
         """ Perform all the requested plotting. The plot should be completely
         specified using the other methods before calling this method.
+
+        INTPUT
+        cBarsDone: bool. Pass True if the colourbars have already been 
+            finalised by calling finaliseCBarSpec on all the Plotter objects.
+            Otherwise pass False, and they will be finalised here.
         """
         self._checkShares()
-        self._prepareColourBars()
+        if not cBarsDone:
+            self._prepareColourBars()
         self._producePlots()
         self._implementShared()
 
