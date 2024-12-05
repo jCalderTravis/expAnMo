@@ -103,7 +103,8 @@ class Formatter():
     def average(self, within: str | list[str],
                     keep: list[str] = None, 
                     drop: list[str] = None,
-                    checkEqual: bool = True):
+                    checkEqual: bool = True,
+                    avType: str | float ='mean'):
         """ Average the data within specified groups, and optionally dropping
         some columns.
 
@@ -121,6 +122,11 @@ class Formatter():
             for both keep and drop or neither of them.
         checkEqual: bool. If true, check that there are the same number
             of cases in each group.
+        avType: str. What type of averaging to perform. Options are...
+            'mean'
+            'median'
+            A number between 0 and 1: In this case does not find the mean, but
+                the value of the quantile corresponding to the passed number.
         """
         if not isinstance(within, list):
             assert isinstance(within, str)
@@ -141,7 +147,15 @@ class Formatter():
         grouped = self.data.groupby(within)
         if checkEqual:
             checkGroupsEqual(grouped)
-        avData = grouped.mean()
+
+        if avType == 'mean':
+            avData = grouped.mean()
+        elif avType == 'median':
+            avData = grouped.median()
+        elif isinstance(avType, float):
+            avData = grouped.quantile(q=avType)
+        else:
+            raise ValueError('Unrecognised option for type of average')
 
         helpers.checkDfLevels(avData, indexLvs=within)
         avData = avData.reset_index(allow_duplicates=False)
@@ -608,7 +622,7 @@ class SeriesPlotter(Plotter):
 
     def __init__(self, seriesData, sColours, sLabels, 
                  xLabel=None, yLabel=None,
-                 vLines=None, hLine=None,
+                 vLines=None, hLine=False,
                  titleTxt=None, titleRot=0, titleWeight='normal'):
         """
         INPUT

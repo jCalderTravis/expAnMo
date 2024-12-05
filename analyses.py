@@ -340,9 +340,16 @@ class Analysis(object):
                             'permitted')
        
         if self.interactiveMatplotlib:
-            self.dispProgress('Using MNE interactive plotting backend')
             # By default an interactive matplotlib backend is active
-            mne.viz.set_browser_backend('qt') 
+            try:
+                mne.viz.set_browser_backend('qt')
+            except ModuleNotFoundError:
+                msg = ('An interactive matplotlib backend is active, but '+
+                       'could not set the interactive MNE backend. If MNE '+
+                       'plotting is not required, this can be ignored.')
+                self.dispProgress(msg)
+            else:
+                self.dispProgress('Using MNE interactive plotting backend') 
         else:
             self.dispProgress('Using matplotlib with non-interactive backend')
             mne.viz.set_browser_backend('matplotlib') 
